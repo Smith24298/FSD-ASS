@@ -13,7 +13,10 @@ export class DashboardService {
         recentInvoices,
       ] = await Promise.all([
         prisma.rFQVendor.count({
-          where: { vendorId: user.id, rfq: { organizationId: user.organizationId } },
+          where: {
+            vendorId: user.id,
+            rfq: { organizationId: user.organizationId },
+          },
         }),
         prisma.quotation.count({
           where: { vendorId: user.id, organizationId: user.organizationId },

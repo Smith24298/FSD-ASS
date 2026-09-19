@@ -5,7 +5,7 @@ import { getCurrentUser } from "../../shared/middleware/auth.middleware";
 
 export const listNotificationsController = async (
   req: FastifyRequest<{ Querystring: NotificationQuery }>,
-  reply: FastifyReply
+  reply: FastifyReply,
 ) => {
   const userId = (req.user as any).userId;
   const result = await notificationService.list(userId, req.query);
@@ -19,7 +19,7 @@ export const listNotificationsController = async (
 
 export const unreadCountController = async (
   req: FastifyRequest,
-  reply: FastifyReply
+  reply: FastifyReply,
 ) => {
   const userId = (req.user as any).userId;
   const count = await notificationService.unreadCount(
@@ -36,7 +36,7 @@ export const unreadCountController = async (
 
 export const markNotificationReadController = async (
   req: FastifyRequest<{ Params: NotificationParams }>,
-  reply: FastifyReply
+  reply: FastifyReply,
 ) => {
   const userId = (req.user as any).userId;
   const notification = await notificationService.markRead(
@@ -61,7 +61,7 @@ export const markNotificationReadController = async (
 
 export const markAllNotificationsReadController = async (
   req: FastifyRequest,
-  reply: FastifyReply
+  reply: FastifyReply,
 ) => {
   const userId = (req.user as any).userId;
   const result = await notificationService.markAllRead(

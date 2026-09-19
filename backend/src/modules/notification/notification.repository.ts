@@ -27,7 +27,12 @@ export class NotificationRepository {
     });
   }
 
-  async findExisting(userId: number, organizationId: number, type: string, link: string) {
+  async findExisting(
+    userId: number,
+    organizationId: number,
+    type: string,
+    link: string,
+  ) {
     return prisma.notification.findFirst({
       where: {
         userId,

@@ -3,17 +3,40 @@ import { PaginatedNotifications } from "./notification.types";
 import { NotificationQuery } from "./notification.schema";
 
 export class NotificationService {
-  async notify(userId: number, type: string, title: string, message?: string, link?: string) {
-    return notificationRepository.create({ userId, type, title, message, link });
+  async notify(
+    userId: number,
+    type: string,
+    title: string,
+    message?: string,
+    link?: string,
+  ) {
+    return notificationRepository.create({
+      userId,
+      type,
+      title,
+      message,
+      link,
+    });
   }
 
-  async notifyMany(userIds: number[], type: string, title: string, message?: string, link?: string) {
+  async notifyMany(
+    userIds: number[],
+    type: string,
+    title: string,
+    message?: string,
+    link?: string,
+  ) {
     return Promise.all(
-      userIds.map((userId) => notificationRepository.create({ userId, type, title, message, link }))
+      userIds.map((userId) =>
+        notificationRepository.create({ userId, type, title, message, link }),
+      ),
     );
   }
 
-  async list(userId: number, query: NotificationQuery): Promise<PaginatedNotifications> {
+  async list(
+    userId: number,
+    query: NotificationQuery,
+  ): Promise<PaginatedNotifications> {
     const { page, limit, isRead, type } = query;
     const skip = (page - 1) * limit;
 
