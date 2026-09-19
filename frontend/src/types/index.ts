@@ -1,7 +1,10 @@
-export type Role = 'ADMIN' | 'OFFICR' | 'MANAGER' | 'VENDOR';
+export type Role = "ADMIN" | "OFFICR" | "MANAGER" | "VENDOR";
 
 export interface User {
   id: number;
+  organizationId: number;
+  isActive: boolean;
+  organization?: { id: number; name: string; slug: string; code: string };
   name: string;
   email: string;
   userName: string;

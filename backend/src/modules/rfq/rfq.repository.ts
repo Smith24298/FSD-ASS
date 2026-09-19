@@ -11,6 +11,7 @@ import { SafeUser } from "../../shared/types/index.js";
 
 export const safeUserSelect = {
   id: true,
+  organizationId: true,
   email: true,
   userName: true,
   name: true,
@@ -43,25 +44,29 @@ export class RfqRepository {
     throw new Error("UNABLE_TO_GENERATE_RFQ_NUMBER");
   }
 
-  async create(data: {
-    rfqNumber: string;
-    title: string;
-    description?: string;
-    priority: string;
-    quotationDeadline?: Date;
-    expectedDeliveryDate?: Date;
-    requestedById: number;
-    items: Array<{
-      productId?: number;
-      name: string;
+  async create(
+    data: {
+      rfqNumber: string;
+      title: string;
       description?: string;
-      quantity: number;
-      unit?: string;
-      technicalRequirements?: string;
+      priority: string;
+      quotationDeadline?: Date;
       expectedDeliveryDate?: Date;
-    }>;
-    vendorIds?: number[];
-  }, tx?: Tx) {
+      requestedById: number;
+      organizationId: number;
+      items: Array<{
+        productId?: number;
+        name: string;
+        description?: string;
+        quantity: number;
+        unit?: string;
+        technicalRequirements?: string;
+        expectedDeliveryDate?: Date;
+      }>;
+      vendorIds?: number[];
+    },
+    tx?: Tx,
+  ) {
     const client = this.delegate(tx);
     return client.rFQ.create({
       data: {
@@ -72,6 +77,7 @@ export class RfqRepository {
         quotationDeadline: data.quotationDeadline,
         expectedDeliveryDate: data.expectedDeliveryDate,
         requestedById: data.requestedById,
+        organizationId: data.organizationId,
         items: {
           create: data.items.map((item) => ({
             productId: item.productId,
@@ -161,7 +167,7 @@ export class RfqRepository {
   async update(
     id: number,
     data: Prisma.RFQUpdateInput | Prisma.RFQUncheckedUpdateInput,
-    tx?: Tx
+    tx?: Tx,
   ) {
     const client = this.delegate(tx);
     return client.rFQ.update({ where: { id }, data });
@@ -170,16 +176,17 @@ export class RfqRepository {
   async updateWhere(
     where: Prisma.RFQWhereInput,
     data: Prisma.RFQUncheckedUpdateManyInput,
-    tx?: Tx
+    tx?: Tx,
   ) {
     const client = this.delegate(tx);
     return client.rFQ.updateMany({ where, data });
   }
 
-  async findVendorUsersByIds(ids: number[]) {
+  async findVendorUsersByIds(ids: number[], organizationId?: number) {
     return prisma.user.findMany({
       where: {
         id: { in: ids },
+        ...(organizationId ? { organizationId } : {}),
         role: "VENDOR",
         isActive: true,
         profile: { isNot: null },
@@ -188,9 +195,18 @@ export class RfqRepository {
     });
   }
 
-  async findActiveVendorById(id: number): Promise<SafeUser | null> {
+  async findActiveVendorById(
+    id: number,
+    organizationId?: number,
+  ): Promise<SafeUser | null> {
     return prisma.user.findFirst({
-      where: { id, role: "VENDOR", isActive: true, profile: { isNot: null } },
+      where: {
+        id,
+        ...(organizationId ? { organizationId } : {}),
+        role: "VENDOR",
+        isActive: true,
+        profile: { isNot: null },
+      },
       select: safeUserSelect,
     });
   }
@@ -220,7 +236,7 @@ export class RfqRepository {
       respondedAt?: Date | null;
       declineReason?: string | null;
     },
-    tx?: Tx
+    tx?: Tx,
   ) {
     const client = this.delegate(tx);
     return client.rFQVendor.update({
@@ -240,7 +256,7 @@ export class RfqRepository {
     rfqId: number,
     data: { status?: RFQInvitationStatus },
     where?: Prisma.RFQVendorWhereInput,
-    tx?: Tx
+    tx?: Tx,
   ) {
     const client = this.delegate(tx);
     return client.rFQVendor.updateMany({
@@ -249,9 +265,9 @@ export class RfqRepository {
     });
   }
 
-  async findActivities(rfqId: number) {
+  async findActivities(rfqId: number, organizationId: number) {
     return prisma.rFQActivity.findMany({
-      where: { rfqId },
+      where: { rfqId, organizationId },
       include: { user: { select: safeUserSelect } },
       orderBy: { createdAt: "desc" },
     });
@@ -262,11 +278,22 @@ export class RfqRepository {
     userId: number,
     event: ActivityEvent,
     details?: string,
-    tx?: Tx
+    tx?: Tx,
   ) {
     const client = this.delegate(tx);
+    const rfq = await client.rFQ.findUnique({
+      where: { id: rfqId },
+      select: { organizationId: true },
+    });
+    if (!rfq) throw new Error("RFQ not found");
     return client.rFQActivity.create({
-      data: { rfqId, userId, event, details },
+      data: {
+        rfqId,
+        userId,
+        event,
+        details,
+        organizationId: rfq.organizationId,
+      },
       include: { user: { select: safeUserSelect } },
     });
   }
@@ -276,11 +303,22 @@ export class RfqRepository {
     userId: number,
     event: ActivityEvent,
     details: string[],
-    tx?: Tx
+    tx?: Tx,
   ) {
     const client = this.delegate(tx);
+    const rfq = await client.rFQ.findUnique({
+      where: { id: rfqId },
+      select: { organizationId: true },
+    });
+    if (!rfq) throw new Error("RFQ not found");
     return client.rFQActivity.createMany({
-      data: details.map((detail) => ({ rfqId, userId, event, details: detail })),
+      data: details.map((detail) => ({
+        rfqId,
+        userId,
+        event,
+        details: detail,
+        organizationId: rfq.organizationId,
+      })),
     });
   }
 
@@ -306,9 +344,13 @@ export class RfqRepository {
     return prisma.rFQAttachment.delete({ where: { id } });
   }
 
-  async findManagers(): Promise<SafeUser[]> {
+  async findManagers(organizationId?: number): Promise<SafeUser[]> {
     return prisma.user.findMany({
-      where: { role: "MANAGER", isActive: true },
+      where: {
+        role: "MANAGER",
+        isActive: true,
+        ...(organizationId ? { organizationId } : {}),
+      },
       select: safeUserSelect,
     });
   }

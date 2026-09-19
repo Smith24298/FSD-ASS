@@ -8,6 +8,13 @@ export class NotificationRepository {
     message?: string;
     link?: string;
   }) {
+    const user = await prisma.user.findUnique({
+      where: { id: data.userId },
+      select: { organizationId: true },
+    });
+    if (!user) {
+      throw new Error("Notification recipient not found");
+    }
     return prisma.notification.create({
       data: {
         userId: data.userId,
@@ -15,14 +22,16 @@ export class NotificationRepository {
         title: data.title,
         message: data.message ?? null,
         link: data.link ?? null,
+        organizationId: user.organizationId,
       },
     });
   }
 
-  async findExisting(userId: number, type: string, link: string) {
+  async findExisting(userId: number, organizationId: number, type: string, link: string) {
     return prisma.notification.findFirst({
       where: {
         userId,
+        organizationId,
         type: type as any,
         link,
       },
@@ -47,27 +56,29 @@ export class NotificationRepository {
     return prisma.notification.count({ where });
   }
 
-  async findById(id: number) {
-    return prisma.notification.findUnique({ where: { id } });
+  async findById(id: number, userId: number, organizationId: number) {
+    return prisma.notification.findFirst({
+      where: { id, userId, organizationId },
+    });
   }
 
-  async markRead(id: number) {
+  async markRead(id: number, userId: number, organizationId: number) {
     return prisma.notification.update({
-      where: { id },
+      where: { id, userId, organizationId },
       data: { isRead: true },
     });
   }
 
-  async markAllRead(userId: number) {
+  async markAllRead(userId: number, organizationId: number) {
     return prisma.notification.updateMany({
-      where: { userId, isRead: false },
+      where: { userId, organizationId, isRead: false },
       data: { isRead: true },
     });
   }
 
-  async unreadCount(userId: number): Promise<number> {
+  async unreadCount(userId: number, organizationId: number): Promise<number> {
     return prisma.notification.count({
-      where: { userId, isRead: false },
+      where: { userId, organizationId, isRead: false },
     });
   }
 }

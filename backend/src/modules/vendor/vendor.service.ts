@@ -16,7 +16,7 @@ export class VendorService {
     const { page, limit, search, category, status, sortBy, sortOrder } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: any = { organizationId: user.organizationId };
 
     if (search) {
       where.OR = [
@@ -50,9 +50,11 @@ export class VendorService {
 
     let orderBy: any = { createdAt: sortOrder };
     if (sortBy === "name") orderBy = { name: sortOrder };
-    if (sortBy === "companyName") orderBy = { profile: { companyName: sortOrder } };
+    if (sortBy === "companyName")
+      orderBy = { profile: { companyName: sortOrder } };
     if (sortBy === "category") orderBy = { profile: { category: sortOrder } };
-    if (sortBy === "vendorCode") orderBy = { profile: { vendorCode: sortOrder } };
+    if (sortBy === "vendorCode")
+      orderBy = { profile: { vendorCode: sortOrder } };
 
     const [vendors, total] = await Promise.all([
       vendorRepository.findMany({ where, skip, take: limit, orderBy }),
@@ -72,11 +74,17 @@ export class VendorService {
 
   async getById(user: SafeUser, id: number) {
     if (user.role === "VENDOR" && user.id !== id) {
-      throw AppError.forbidden("You are not authorized to view this vendor's details", "FORBIDDEN");
+      throw AppError.forbidden(
+        "You are not authorized to view this vendor's details",
+        "FORBIDDEN",
+      );
     }
 
     const vendor = await vendorRepository.findById(id);
     if (!vendor) {
+      throw AppError.notFound("Vendor not found", "VENDOR_NOT_FOUND");
+    }
+    if (vendor.organizationId !== user.organizationId) {
       throw AppError.notFound("Vendor not found", "VENDOR_NOT_FOUND");
     }
 
@@ -89,10 +97,16 @@ export class VendorService {
       throw AppError.conflict("Email is already registered", "EMAIL_EXISTS");
     }
 
-    const userName = input.userName || input.email.split("@")[0].toLowerCase().replace(/[^a-z0-9_.]/g, "") + Math.floor(Math.random() * 1000);
+    const userName =
+      input.userName ||
+      input.email
+        .split("@")[0]
+        .toLowerCase()
+        .replace(/[^a-z0-9_.]/g, "") + Math.floor(Math.random() * 1000);
     const password = input.password || "Vendor@123!";
     const passwordHash = await argon2.hash(password);
-    const vendorCode = input.vendorCode || (await vendorRepository.generateVendorCode());
+    const vendorCode =
+      input.vendorCode || (await vendorRepository.generateVendorCode());
 
     const result = await prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
@@ -103,6 +117,7 @@ export class VendorService {
           passwordHash,
           role: "VENDOR",
           isActive: input.status !== "INACTIVE" && input.status !== "SUSPENDED",
+          organizationId: user.organizationId,
         },
       });
 
@@ -116,6 +131,7 @@ export class VendorService {
           category: input.category,
           vendorCode,
           status: input.status,
+          organizationId: user.organizationId,
         },
       });
 
@@ -132,7 +148,10 @@ export class VendorService {
     }
 
     if (user.role === "VENDOR" && user.id !== id) {
-      throw AppError.forbidden("You cannot modify another vendor's profile", "FORBIDDEN");
+      throw AppError.forbidden(
+        "You cannot modify another vendor's profile",
+        "FORBIDDEN",
+      );
     }
 
     await prisma.$transaction(async (tx) => {
@@ -152,7 +171,8 @@ export class VendorService {
       if (input.gstNumber) profileData.gstNumber = input.gstNumber;
       if (input.address) profileData.address = input.address;
       if (input.category) profileData.category = input.category;
-      if (input.vendorCode && user.role === "ADMIN") profileData.vendorCode = input.vendorCode;
+      if (input.vendorCode && user.role === "ADMIN")
+        profileData.vendorCode = input.vendorCode;
       if (input.status && (user.role === "ADMIN" || user.role === "OFFICR")) {
         profileData.status = input.status;
       }
@@ -168,7 +188,11 @@ export class VendorService {
     return this.getById(user, id);
   }
 
-  async updateStatus(user: SafeUser, id: number, input: UpdateVendorStatusInput) {
+  async updateStatus(
+    user: SafeUser,
+    id: number,
+    input: UpdateVendorStatusInput,
+  ) {
     const vendor = await vendorRepository.findById(id);
     if (!vendor) {
       throw AppError.notFound("Vendor not found", "VENDOR_NOT_FOUND");

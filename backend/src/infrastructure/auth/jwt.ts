@@ -5,6 +5,7 @@ const secret = new TextEncoder().encode(process.env.JWT_SECRET);
 
 type Payload = {
   userId: number;
+  organizationId: number;
   email: string;
   userName: string;
   name: string;

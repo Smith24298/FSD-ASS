@@ -48,20 +48,24 @@ export class NotificationService {
     };
   }
 
-  async markRead(userId: number, id: number) {
-    const notification = await notificationRepository.findById(id);
-    if (!notification || notification.userId !== userId) {
+  async markRead(userId: number, organizationId: number, id: number) {
+    const notification = await notificationRepository.findById(
+      id,
+      userId,
+      organizationId,
+    );
+    if (!notification) {
       return null;
     }
-    return notificationRepository.markRead(id);
+    return notificationRepository.markRead(id, userId, organizationId);
   }
 
-  async markAllRead(userId: number) {
-    return notificationRepository.markAllRead(userId);
+  async markAllRead(userId: number, organizationId: number) {
+    return notificationRepository.markAllRead(userId, organizationId);
   }
 
-  async unreadCount(userId: number): Promise<number> {
-    return notificationRepository.unreadCount(userId);
+  async unreadCount(userId: number, organizationId: number): Promise<number> {
+    return notificationRepository.unreadCount(userId, organizationId);
   }
 }
 

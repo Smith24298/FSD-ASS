@@ -12,18 +12,26 @@ export class DashboardService {
         recentOrders,
         recentInvoices,
       ] = await Promise.all([
-        prisma.rFQVendor.count({ where: { vendorId: user.id } }),
-        prisma.quotation.count({ where: { vendorId: user.id } }),
-        prisma.purchaseOrder.count({ where: { vendorId: user.id } }),
-        prisma.invoice.count({ where: { vendorId: user.id } }),
+        prisma.rFQVendor.count({
+          where: { vendorId: user.id, rfq: { organizationId: user.organizationId } },
+        }),
+        prisma.quotation.count({
+          where: { vendorId: user.id, organizationId: user.organizationId },
+        }),
+        prisma.purchaseOrder.count({
+          where: { vendorId: user.id, organizationId: user.organizationId },
+        }),
+        prisma.invoice.count({
+          where: { vendorId: user.id, organizationId: user.organizationId },
+        }),
         prisma.purchaseOrder.findMany({
-          where: { vendorId: user.id },
+          where: { vendorId: user.id, organizationId: user.organizationId },
           take: 5,
           orderBy: { createdAt: "desc" },
           include: { rfq: { select: { rfqNumber: true, title: true } } },
         }),
         prisma.invoice.findMany({
-          where: { vendorId: user.id },
+          where: { vendorId: user.id, organizationId: user.organizationId },
           take: 5,
           orderBy: { createdAt: "desc" },
           include: { purchaseOrder: { select: { poNumber: true } } },
@@ -51,10 +59,14 @@ export class DashboardService {
         recentPos,
         poSum,
       ] = await Promise.all([
-        prisma.approvalRequest.count({ where: { status: "PENDING" } }),
-        prisma.approvalRequest.count({ where: { status: "APPROVED" } }),
+        prisma.approvalRequest.count({
+          where: { status: "PENDING", organizationId: user.organizationId },
+        }),
+        prisma.approvalRequest.count({
+          where: { status: "APPROVED", organizationId: user.organizationId },
+        }),
         prisma.approvalRequest.findMany({
-          where: { status: "PENDING" },
+          where: { status: "PENDING", organizationId: user.organizationId },
           take: 5,
           orderBy: { requestedAt: "desc" },
           include: {
@@ -71,6 +83,7 @@ export class DashboardService {
           },
         }),
         prisma.purchaseOrder.findMany({
+          where: { organizationId: user.organizationId },
           take: 5,
           orderBy: { createdAt: "desc" },
           include: {
@@ -80,7 +93,10 @@ export class DashboardService {
         }),
         prisma.purchaseOrder.aggregate({
           _sum: { total: true },
-          where: { status: { not: "CANCELLED" } },
+          where: {
+            status: { not: "CANCELLED" },
+            organizationId: user.organizationId,
+          },
         }),
       ]);
 
@@ -112,19 +128,35 @@ export class DashboardService {
     ] = await Promise.all([
       prisma.rFQ.count({
         where: {
+          organizationId: user.organizationId,
           status: { in: ["PUBLISHED", "OPEN", "UNDER_REVIEW", "SHORTLISTED"] },
         },
       }),
-      prisma.quotation.count({ where: { status: "SUBMITTED" } }),
-      prisma.approvalRequest.count({ where: { status: "PENDING" } }),
-      prisma.user.count({ where: { role: "VENDOR" } }),
-      prisma.purchaseOrder.count({ where: { status: { not: "CANCELLED" } } }),
-      prisma.invoice.count(),
+      prisma.quotation.count({
+        where: { status: "SUBMITTED", organizationId: user.organizationId },
+      }),
+      prisma.approvalRequest.count({
+        where: { status: "PENDING", organizationId: user.organizationId },
+      }),
+      prisma.user.count({
+        where: { role: "VENDOR", organizationId: user.organizationId },
+      }),
+      prisma.purchaseOrder.count({
+        where: {
+          status: { not: "CANCELLED" },
+          organizationId: user.organizationId,
+        },
+      }),
+      prisma.invoice.count({ where: { organizationId: user.organizationId } }),
       prisma.purchaseOrder.aggregate({
         _sum: { total: true },
-        where: { status: { not: "CANCELLED" } },
+        where: {
+          status: { not: "CANCELLED" },
+          organizationId: user.organizationId,
+        },
       }),
       prisma.rFQ.findMany({
+        where: { organizationId: user.organizationId },
         take: 5,
         orderBy: { createdAt: "desc" },
         select: {
@@ -138,6 +170,7 @@ export class DashboardService {
         },
       }),
       prisma.purchaseOrder.findMany({
+        where: { organizationId: user.organizationId },
         take: 5,
         orderBy: { createdAt: "desc" },
         include: {
@@ -146,6 +179,7 @@ export class DashboardService {
         },
       }),
       prisma.invoice.findMany({
+        where: { organizationId: user.organizationId },
         take: 5,
         orderBy: { createdAt: "desc" },
         include: {

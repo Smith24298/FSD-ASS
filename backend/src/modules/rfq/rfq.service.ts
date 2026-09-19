@@ -46,7 +46,10 @@ class RfqService {
     }
 
     if (vendorIds.length > 0) {
-      const validVendors = await rfqRepository.findVendorUsersByIds(vendorIds);
+      const validVendors = await rfqRepository.findVendorUsersByIds(
+        vendorIds,
+        user.organizationId,
+      );
       if (validVendors.length !== vendorIds.length) {
         throw AppError.badRequest(
           "One or more vendors are invalid or inactive",
@@ -65,6 +68,7 @@ class RfqService {
         ? new Date(input.expectedDeliveryDate)
         : undefined,
       requestedById: user.id,
+      organizationId: user.organizationId,
       items: input.items.map((item) => ({
         ...item,
         expectedDeliveryDate: item.expectedDeliveryDate
@@ -150,8 +154,10 @@ class RfqService {
     });
 
     const invitedVendorIds = rfq.vendors.map((v) => v.vendorId);
-    const validVendors =
-      await rfqRepository.findVendorUsersByIds(invitedVendorIds);
+    const validVendors = await rfqRepository.findVendorUsersByIds(
+      invitedVendorIds,
+      user.organizationId,
+    );
     if (validVendors.length !== invitedVendorIds.length) {
       throw AppError.badRequest(
         "One or more invited vendors are no longer valid or active",
@@ -395,7 +401,7 @@ class RfqService {
       order,
     } = query;
     const skip = (page - 1) * limit;
-    const where: any = {};
+    const where: any = { organizationId: user.organizationId };
 
     if (user.role === "VENDOR") {
       where.vendors = { some: { vendorId: user.id } };
@@ -465,6 +471,9 @@ class RfqService {
   async getDetail(user: SafeUser, rfqId: number) {
     let rfq = await rfqRepository.findUniqueById(rfqId);
     if (!rfq) {
+      throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
+    }
+    if (rfq.organizationId !== user.organizationId) {
       throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
     }
 
@@ -671,7 +680,10 @@ class RfqService {
       );
     }
 
-    const vendor = await rfqRepository.findActiveVendorById(vendorId);
+    const vendor = await rfqRepository.findActiveVendorById(
+      vendorId,
+      user.organizationId,
+    );
     if (!vendor) {
       throw AppError.badRequest(
         "Vendor is not found, inactive, or has no profile",
@@ -995,7 +1007,10 @@ class RfqService {
     if (!rfq) {
       throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
     }
-    return rfqRepository.findActivities(rfqId);
+    if (rfq.organizationId !== user.organizationId) {
+      throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
+    }
+    return rfqRepository.findActivities(rfqId, user.organizationId);
   }
 
   async runDeadlineProcessing() {
@@ -1016,6 +1031,7 @@ class RfqService {
       for (const vendor of rfq.vendors ?? []) {
         const existing = await notificationRepository.findExisting(
           vendor.vendorId,
+          rfq.organizationId,
           "RFQ_DEADLINE_APPROACHING",
           link,
         );

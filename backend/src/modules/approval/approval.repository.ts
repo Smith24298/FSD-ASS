@@ -5,13 +5,22 @@ import { safeUserSelect } from "../rfq/rfq.repository";
 type Tx = Prisma.TransactionClient;
 
 export class ApprovalRepository {
-  async create(data: { rfqId: number; quotationId: number; requestedById: number }, tx?: Tx) {
+  async create(
+    data: { rfqId: number; quotationId: number; requestedById: number },
+    tx?: Tx,
+  ) {
     const client = tx ?? prisma;
+    const rfq = await client.rFQ.findUnique({
+      where: { id: data.rfqId },
+      select: { organizationId: true },
+    });
+    if (!rfq) throw new Error("RFQ not found");
     return client.approvalRequest.create({
       data: {
         rfqId: data.rfqId,
         quotationId: data.quotationId,
         requestedById: data.requestedById,
+        organizationId: rfq.organizationId,
       },
     });
   }
@@ -20,7 +29,9 @@ export class ApprovalRepository {
     return prisma.approvalRequest.findUnique({
       where: { id },
       include: {
-        rfq: { select: { id: true, rfqNumber: true, title: true, status: true } },
+        rfq: {
+          select: { id: true, rfqNumber: true, title: true, status: true },
+        },
         quotation: {
           include: {
             vendor: { select: safeUserSelect },
@@ -52,7 +63,9 @@ export class ApprovalRepository {
       take: options.take,
       orderBy: options.orderBy,
       include: {
-        rfq: { select: { id: true, rfqNumber: true, title: true, status: true } },
+        rfq: {
+          select: { id: true, rfqNumber: true, title: true, status: true },
+        },
         quotation: {
           include: {
             vendor: { select: safeUserSelect },
@@ -76,7 +89,7 @@ export class ApprovalRepository {
       decidedAt?: Date;
       comment?: string | null;
     },
-    tx?: Tx
+    tx?: Tx,
   ) {
     const client = tx ?? prisma;
     return client.approvalRequest.update({

@@ -12,6 +12,7 @@ export class EmployeeRepository {
         employee: {
           select: {
             id: true,
+            organizationId: true,
             email: true,
             userName: true,
             name: true,
@@ -40,6 +41,7 @@ export class EmployeeRepository {
         employee: {
           select: {
             id: true,
+            organizationId: true,
             email: true,
             userName: true,
             name: true,
@@ -57,7 +59,10 @@ export class EmployeeRepository {
     return prisma.employee.count({ where });
   }
 
-  async findById(adminId: number, id: number): Promise<EmployeeWithUser | null> {
+  async findById(
+    adminId: number,
+    id: number,
+  ): Promise<EmployeeWithUser | null> {
     return prisma.employee.findFirst({
       where: {
         id,
@@ -67,6 +72,7 @@ export class EmployeeRepository {
         employee: {
           select: {
             id: true,
+            organizationId: true,
             email: true,
             userName: true,
             name: true,
@@ -87,6 +93,7 @@ export class EmployeeRepository {
         employee: {
           select: {
             id: true,
+            organizationId: true,
             email: true,
             userName: true,
             name: true,
@@ -100,12 +107,16 @@ export class EmployeeRepository {
     });
   }
 
-  async updateEmployeeUser(employeeId: number, data: any): Promise<SafeUser | null> {
+  async updateEmployeeUser(
+    employeeId: number,
+    data: any,
+  ): Promise<SafeUser | null> {
     return prisma.user.update({
       where: { id: employeeId },
       data,
       select: {
         id: true,
+        organizationId: true,
         email: true,
         userName: true,
         name: true,
@@ -117,7 +128,10 @@ export class EmployeeRepository {
     });
   }
 
-  async updateStatus(id: number, isActive: boolean): Promise<EmployeeWithUser | null> {
+  async updateStatus(
+    id: number,
+    isActive: boolean,
+  ): Promise<EmployeeWithUser | null> {
     return prisma.employee.update({
       where: { id },
       data: { isActive },
@@ -125,6 +139,7 @@ export class EmployeeRepository {
         employee: {
           select: {
             id: true,
+            organizationId: true,
             email: true,
             userName: true,
             name: true,

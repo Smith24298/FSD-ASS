@@ -10,7 +10,11 @@ import {
 } from "../rfq/rfq.state-helpers";
 import { approvalRepository } from "../approval/approval.repository";
 import { notificationService } from "../notification/notification.service";
-import { QuotationQuery, QuotationSubmitInput, QuotationUpdateInput } from "./quotation.schema";
+import {
+  QuotationQuery,
+  QuotationSubmitInput,
+  QuotationUpdateInput,
+} from "./quotation.schema";
 
 function computeMoney(input: QuotationSubmitInput["items"]) {
   return input.map((item) => {
@@ -22,8 +26,13 @@ function computeMoney(input: QuotationSubmitInput["items"]) {
   });
 }
 
-function sumSubtotal(items: Array<{ subtotal: Prisma.Decimal }>): Prisma.Decimal {
-  return items.reduce((acc, item) => acc.add(item.subtotal), new Prisma.Decimal(0));
+function sumSubtotal(
+  items: Array<{ subtotal: Prisma.Decimal }>,
+): Prisma.Decimal {
+  return items.reduce(
+    (acc, item) => acc.add(item.subtotal),
+    new Prisma.Decimal(0),
+  );
 }
 
 function sumTax(items: Array<{ tax: Prisma.Decimal }>): Prisma.Decimal {
@@ -98,19 +107,31 @@ export class QuotationService {
     if (!rfq) {
       throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
     }
+    if (rfq.organizationId !== user.organizationId) {
+      throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
+    }
 
     const invitation = await rfqRepository.findInvitation(rfq.id, user.id);
     if (!invitation) {
-      throw AppError.forbidden("You are not invited to this RFQ", "NOT_INVITED");
+      throw AppError.forbidden(
+        "You are not invited to this RFQ",
+        "NOT_INVITED",
+      );
     }
     if (invitation.status === "DECLINED") {
-      throw AppError.conflict("You have declined this invitation and cannot submit a quotation", "INVITATION_DECLINED");
+      throw AppError.conflict(
+        "You have declined this invitation and cannot submit a quotation",
+        "INVITATION_DECLINED",
+      );
     }
 
     const resolved = await resolveRfqDeadlineState(rfq);
     await assertQuotationSubmissionAllowed(resolved.rfq);
 
-    const existing = await quotationRepository.findByRfqAndVendor(rfq.id, user.id);
+    const existing = await quotationRepository.findByRfqAndVendor(
+      rfq.id,
+      user.id,
+    );
     if (existing) {
       if (existing.status === "DRAFT") {
         return this.update(user, existing.id, {
@@ -120,7 +141,7 @@ export class QuotationService {
       }
       throw AppError.conflict(
         "A quotation has already been submitted for this RFQ",
-        "QUOTATION_ALREADY_SUBMITTED"
+        "QUOTATION_ALREADY_SUBMITTED",
       );
     }
 
@@ -129,7 +150,7 @@ export class QuotationService {
       if (item.rfqItemId && !rfqItemMap.has(item.rfqItemId)) {
         throw AppError.badRequest(
           `RFQ item ${item.rfqItemId} does not belong to this RFQ`,
-          "INVALID_RFQ_ITEM"
+          "INVALID_RFQ_ITEM",
         );
       }
     }
@@ -154,12 +175,14 @@ export class QuotationService {
           currency: input.currency ?? "INR",
           paymentTerms: input.paymentTerms,
           deliveryDays: input.deliveryDays,
-          deliveryDate: input.deliveryDate ? new Date(input.deliveryDate) : undefined,
+          deliveryDate: input.deliveryDate
+            ? new Date(input.deliveryDate)
+            : undefined,
           validityDays: input.validityDays,
           notes: input.notes,
           items: computedItems,
         },
-        tx
+        tx,
       );
 
       if (!input.isDraft) {
@@ -167,14 +190,14 @@ export class QuotationService {
           rfq.id,
           user.id,
           { status: "QUOTATION_SUBMITTED", respondedAt: new Date() },
-          tx
+          tx,
         );
         await rfqRepository.createActivity(
           rfq.id,
           user.id,
           "QUOTATION_SUBMITTED",
           `Quotation ${quotationNumber} submitted by ${user.name} for total ${totalAmount.toString()} ${input.currency ?? "INR"}`,
-          tx
+          tx,
         );
       }
 
@@ -187,7 +210,7 @@ export class QuotationService {
         "QUOTATION_SUBMITTED",
         "New quotation received",
         `Vendor ${user.name} submitted quotation ${quotationNumber} totalling ${totalAmount.toString()} for ${rfq.rfqNumber}`,
-        `/rfqs/${rfq.id}`
+        `/rfqs/${rfq.id}`,
       );
     }
 
@@ -201,7 +224,10 @@ export class QuotationService {
     }
 
     if (quotation.vendorId !== user.id) {
-      throw AppError.forbidden("You cannot modify another vendor's quotation", "FORBIDDEN");
+      throw AppError.forbidden(
+        "You cannot modify another vendor's quotation",
+        "FORBIDDEN",
+      );
     }
 
     // Terminal statuses forbid editing
@@ -216,12 +242,15 @@ export class QuotationService {
     ) {
       throw AppError.conflict(
         `Quotation is in ${quotation.status} state and cannot be modified`,
-        "QUOTATION_IMMUTABLE"
+        "QUOTATION_IMMUTABLE",
       );
     }
 
     const rfq = await rfqRepository.findUniqueById(quotation.rfqId);
     if (!rfq) {
+      throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
+    }
+    if (rfq.organizationId !== user.organizationId) {
       throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
     }
 
@@ -239,7 +268,7 @@ export class QuotationService {
         if (item.rfqItemId && !rfqItemMap.has(item.rfqItemId)) {
           throw AppError.badRequest(
             `RFQ item ${item.rfqItemId} does not belong to this RFQ`,
-            "INVALID_RFQ_ITEM"
+            "INVALID_RFQ_ITEM",
           );
         }
       }
@@ -249,7 +278,8 @@ export class QuotationService {
       totalAmount = subtotal.add(tax);
     }
 
-    const shouldSubmit = input.isDraft === false && quotation.status === "DRAFT";
+    const shouldSubmit =
+      input.isDraft === false && quotation.status === "DRAFT";
     const newStatus = shouldSubmit ? "SUBMITTED" : undefined;
 
     await prisma.$transaction(async (tx) => {
@@ -263,12 +293,14 @@ export class QuotationService {
           currency: input.currency,
           paymentTerms: input.paymentTerms,
           deliveryDays: input.deliveryDays,
-          deliveryDate: input.deliveryDate ? new Date(input.deliveryDate) : undefined,
+          deliveryDate: input.deliveryDate
+            ? new Date(input.deliveryDate)
+            : undefined,
           validityDays: input.validityDays,
           notes: input.notes,
           items: computedItems,
         },
-        tx
+        tx,
       );
 
       if (shouldSubmit) {
@@ -276,14 +308,14 @@ export class QuotationService {
           rfq.id,
           user.id,
           { status: "QUOTATION_SUBMITTED", respondedAt: new Date() },
-          tx
+          tx,
         );
         await rfqRepository.createActivity(
           rfq.id,
           user.id,
           "QUOTATION_SUBMITTED",
           `Draft quotation #${id} submitted by ${user.name}`,
-          tx
+          tx,
         );
       } else {
         await rfqRepository.createActivity(
@@ -291,7 +323,7 @@ export class QuotationService {
           user.id,
           "QUOTATION_UPDATED",
           `Quotation #${id} updated by ${user.name}`,
-          tx
+          tx,
         );
       }
     });
@@ -302,7 +334,7 @@ export class QuotationService {
         "QUOTATION_SUBMITTED",
         "Quotation submitted",
         `Vendor ${user.name} submitted quotation for ${rfq.rfqNumber}`,
-        `/rfqs/${rfq.id}`
+        `/rfqs/${rfq.id}`,
       );
     }
 
@@ -317,7 +349,7 @@ export class QuotationService {
     const { page, limit, rfqId, vendorId, status } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: any = { organizationId: user.organizationId };
 
     if (user.role === "VENDOR") {
       where.vendorId = user.id;
@@ -352,19 +384,31 @@ export class QuotationService {
     if (!quotation) {
       throw AppError.notFound("Quotation not found", "QUOTATION_NOT_FOUND");
     }
+    if (quotation.organizationId !== user.organizationId) {
+      throw AppError.notFound("Quotation not found", "QUOTATION_NOT_FOUND");
+    }
     if (user.role === "VENDOR" && quotation.vendorId !== user.id) {
-      throw AppError.forbidden("You are not authorized to view this quotation", "FORBIDDEN");
+      throw AppError.forbidden(
+        "You are not authorized to view this quotation",
+        "FORBIDDEN",
+      );
     }
     return serializeQuotation(quotation, user.role);
   }
 
   async compare(user: SafeUser, rfqId: number) {
     if (user.role === "VENDOR") {
-      throw AppError.forbidden("Vendors cannot view quotation comparisons", "FORBIDDEN");
+      throw AppError.forbidden(
+        "Vendors cannot view quotation comparisons",
+        "FORBIDDEN",
+      );
     }
 
     const rfq = await rfqRepository.findUniqueById(rfqId);
     if (!rfq) {
+      throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
+    }
+    if (rfq.organizationId !== user.organizationId) {
       throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
     }
     if (rfq.status === "DRAFT") {
@@ -379,7 +423,9 @@ export class QuotationService {
       orderBy: { totalAmount: "asc" },
     });
 
-    const serializedQuotes = quotations.map((q) => serializeQuotation(q, user.role));
+    const serializedQuotes = quotations.map((q) =>
+      serializeQuotation(q, user.role),
+    );
 
     let lowestTotalQuoteId: number | null = null;
     let lowestTotalAmount: string | null = null;
@@ -388,14 +434,18 @@ export class QuotationService {
 
     if (quotations.length > 0) {
       const sortedByTotal = [...quotations].sort((a, b) =>
-        a.totalAmount.comparedTo(b.totalAmount)
+        a.totalAmount.comparedTo(b.totalAmount),
       );
       lowestTotalQuoteId = sortedByTotal[0].id;
       lowestTotalAmount = sortedByTotal[0].totalAmount.toString();
 
-      const withDelivery = quotations.filter((q) => q.deliveryDays !== null && q.deliveryDays !== undefined);
+      const withDelivery = quotations.filter(
+        (q) => q.deliveryDays !== null && q.deliveryDays !== undefined,
+      );
       if (withDelivery.length > 0) {
-        const sortedByDelivery = [...withDelivery].sort((a, b) => (a.deliveryDays! - b.deliveryDays!));
+        const sortedByDelivery = [...withDelivery].sort(
+          (a, b) => a.deliveryDays! - b.deliveryDays!,
+        );
         fastestDeliveryQuoteId = sortedByDelivery[0].id;
         fastestDeliveryDays = sortedByDelivery[0].deliveryDays;
       }
@@ -408,7 +458,9 @@ export class QuotationService {
       let lowestQuoteId: number | null = null;
 
       for (const q of quotations) {
-        const matchingItem = q.items.find((qi: any) => qi.rfqItemId === rfqItem.id || qi.name === rfqItem.name);
+        const matchingItem = q.items.find(
+          (qi: any) => qi.rfqItemId === rfqItem.id || qi.name === rfqItem.name,
+        );
         if (matchingItem) {
           const priceNum = matchingItem.unitPrice.toNumber();
           if (lowestUnitPrice === null || priceNum < lowestUnitPrice) {
@@ -457,54 +509,82 @@ export class QuotationService {
     if (!rfq) {
       throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
     }
-    if (rfq.status === "CANCELLED" || rfq.status === "EXPIRED" || rfq.status === "AWARDED") {
-      throw AppError.conflict(`RFQ is ${rfq.status}; it can no longer be shortlisted`, "INVALID_RFQ_STATE");
+    if (rfq.organizationId !== user.organizationId) {
+      throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
+    }
+    if (
+      rfq.status === "CANCELLED" ||
+      rfq.status === "EXPIRED" ||
+      rfq.status === "AWARDED"
+    ) {
+      throw AppError.conflict(
+        `RFQ is ${rfq.status}; it can no longer be shortlisted`,
+        "INVALID_RFQ_STATE",
+      );
     }
     if (rfq.status === "DRAFT") {
-      throw AppError.conflict("RFQ must accept quotations before a winner can be selected", "INVALID_RFQ_STATE");
+      throw AppError.conflict(
+        "RFQ must accept quotations before a winner can be selected",
+        "INVALID_RFQ_STATE",
+      );
     }
     if (rfq.status === "PUBLISHED" || rfq.status === "OPEN") {
       const resolved = await resolveRfqDeadlineState(rfq);
-      if (resolved.rfq && (resolved.rfq.status === "PUBLISHED" || resolved.rfq.status === "OPEN")) {
-        throw AppError.conflict("Quote deadline has not passed yet", "RFQ_DEADLINE_NOT_REACHED");
+      if (
+        resolved.rfq &&
+        (resolved.rfq.status === "PUBLISHED" || resolved.rfq.status === "OPEN")
+      ) {
+        throw AppError.conflict(
+          "Quote deadline has not passed yet",
+          "RFQ_DEADLINE_NOT_REACHED",
+        );
       }
     }
 
     const quotation = await quotationRepository.findById(quotationId);
     if (!quotation || quotation.rfqId !== rfqId) {
-      throw AppError.notFound("Quotation not found for this RFQ", "QUOTATION_NOT_FOUND");
+      throw AppError.notFound(
+        "Quotation not found for this RFQ",
+        "QUOTATION_NOT_FOUND",
+      );
     }
     if (quotation.status !== "SUBMITTED") {
-      throw AppError.conflict("This quotation can no longer be shortlisted", "INVALID_QUOTATION_STATE");
+      throw AppError.conflict(
+        "This quotation can no longer be shortlisted",
+        "INVALID_QUOTATION_STATE",
+      );
     }
 
     const existingApproval = await approvalRepository.findByRfq(rfqId);
     if (existingApproval && existingApproval.status === "PENDING") {
-      throw AppError.conflict("An approval request is already pending for this RFQ", "APPROVAL_ALREADY_PENDING");
+      throw AppError.conflict(
+        "An approval request is already pending for this RFQ",
+        "APPROVAL_ALREADY_PENDING",
+      );
     }
 
-    const managers = await rfqRepository.findManagers();
+    const managers = await rfqRepository.findManagers(user.organizationId);
 
     await prisma.$transaction(async (tx) => {
       await quotationRepository.updateStatus(quotationId, "SHORTLISTED", tx);
       await rfqRepository.update(rfqId, { status: "SHORTLISTED" }, tx);
       await approvalRepository.create(
         { rfqId, quotationId, requestedById: user.id },
-        tx
+        tx,
       );
       await rfqRepository.createActivity(
         rfqId,
         user.id,
         "QUOTATION_SHORTLISTED",
         `Quotation #${quotationId} from ${quotation.vendor?.name ?? "vendor"} shortlisted`,
-        tx
+        tx,
       );
       await rfqRepository.createActivity(
         rfqId,
         user.id,
         "APPROVAL_REQUESTED",
         `Approval requested for quotation #${quotationId}`,
-        tx
+        tx,
       );
     });
 
@@ -513,14 +593,14 @@ export class QuotationService {
       "APPROVAL_REQUESTED",
       "Approval required",
       `${rfq.rfqNumber} quotation ${quotation.vendor?.name ?? "vendor"} requires manager approval`,
-      `/rfqs/${rfqId}`
+      `/rfqs/${rfqId}`,
     );
     await notificationService.notify(
       quotation.vendorId,
       "QUOTATION_SHORTLISTED",
       "Your quotation was shortlisted",
       `Your quotation for ${rfq.rfqNumber} was shortlisted`,
-      `/rfqs/${rfqId}`
+      `/rfqs/${rfqId}`,
     );
 
     return this.get(user, quotationId);

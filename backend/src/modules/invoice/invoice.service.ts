@@ -21,19 +21,24 @@ export class InvoiceService {
     if (!po) {
       throw AppError.notFound("Purchase Order not found", "PO_NOT_FOUND");
     }
+    if (po.organizationId !== user.organizationId) {
+      throw AppError.notFound("Purchase Order not found", "PO_NOT_FOUND");
+    }
 
     if (po.status === "CANCELLED" || po.status === "DRAFT") {
       throw AppError.conflict(
         `Cannot generate invoice for Purchase Order in status ${po.status}`,
-        "PO_INVALID_STATUS"
+        "PO_INVALID_STATUS",
       );
     }
 
-    const existingInvoice = await invoiceRepository.findByPurchaseOrderId(po.id);
+    const existingInvoice = await invoiceRepository.findByPurchaseOrderId(
+      po.id,
+    );
     if (existingInvoice) {
       throw AppError.conflict(
         `Invoice already generated for this Purchase Order (${existingInvoice.invoiceNumber})`,
-        "INVOICE_ALREADY_EXISTS"
+        "INVOICE_ALREADY_EXISTS",
       );
     }
 
@@ -57,8 +62,14 @@ export class InvoiceService {
       };
     });
 
-    const subtotal = invoiceItems.reduce((acc, i) => acc.add(i.subtotal), new Prisma.Decimal(0));
-    const tax = invoiceItems.reduce((acc, i) => acc.add(i.tax), new Prisma.Decimal(0));
+    const subtotal = invoiceItems.reduce(
+      (acc, i) => acc.add(i.subtotal),
+      new Prisma.Decimal(0),
+    );
+    const tax = invoiceItems.reduce(
+      (acc, i) => acc.add(i.tax),
+      new Prisma.Decimal(0),
+    );
     const total = subtotal.add(tax);
 
     const invoice = await prisma.$transaction(async (tx) => {
@@ -76,7 +87,7 @@ export class InvoiceService {
           notes: input.notes ?? po.notes,
           items: invoiceItems,
         },
-        tx
+        tx,
       );
 
       await rfqRepository.createActivity(
@@ -84,7 +95,7 @@ export class InvoiceService {
         user.id,
         "INVOICE_CREATED",
         `Invoice ${invoiceNumber} generated for Purchase Order ${po.poNumber} for total ${total.toString()}`,
-        tx
+        tx,
       );
 
       return created;
@@ -95,7 +106,7 @@ export class InvoiceService {
       "INVOICE_GENERATED",
       "Invoice Generated",
       `Invoice ${invoiceNumber} has been generated for Purchase Order ${po.poNumber}. Total: ${total.toString()}`,
-      `/invoices/${invoice.id}`
+      `/invoices/${invoice.id}`,
     );
 
     return invoiceRepository.findById(invoice.id);
@@ -105,7 +116,7 @@ export class InvoiceService {
     const { page, limit, search, status, vendorId, purchaseOrderId } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: any = { organizationId: user.organizationId };
 
     if (user.role === "VENDOR") {
       where.vendorId = user.id;
@@ -120,7 +131,11 @@ export class InvoiceService {
       where.OR = [
         { invoiceNumber: { contains: search, mode: "insensitive" } },
         { vendor: { name: { contains: search, mode: "insensitive" } } },
-        { purchaseOrder: { poNumber: { contains: search, mode: "insensitive" } } },
+        {
+          purchaseOrder: {
+            poNumber: { contains: search, mode: "insensitive" },
+          },
+        },
       ];
     }
 
@@ -150,33 +165,50 @@ export class InvoiceService {
     if (!invoice) {
       throw AppError.notFound("Invoice not found", "INVOICE_NOT_FOUND");
     }
+    if (invoice.organizationId !== user.organizationId) {
+      throw AppError.notFound("Invoice not found", "INVOICE_NOT_FOUND");
+    }
 
     if (user.role === "VENDOR" && invoice.vendorId !== user.id) {
-      throw AppError.forbidden("You are not authorized to view this invoice", "FORBIDDEN");
+      throw AppError.forbidden(
+        "You are not authorized to view this invoice",
+        "FORBIDDEN",
+      );
     }
 
     return invoice;
   }
 
-  async updateStatus(user: SafeUser, id: number, input: UpdateInvoiceStatusInput) {
+  async updateStatus(
+    user: SafeUser,
+    id: number,
+    input: UpdateInvoiceStatusInput,
+  ) {
     const invoice = await invoiceRepository.findById(id);
     if (!invoice) {
       throw AppError.notFound("Invoice not found", "INVOICE_NOT_FOUND");
     }
+    if (invoice.organizationId !== user.organizationId) {
+      throw AppError.notFound("Invoice not found", "INVOICE_NOT_FOUND");
+    }
 
     if (user.role === "VENDOR") {
-      throw AppError.forbidden("Vendors cannot modify invoice status", "FORBIDDEN");
+      throw AppError.forbidden(
+        "Vendors cannot modify invoice status",
+        "FORBIDDEN",
+      );
     }
 
     const updated = await prisma.$transaction(async (tx) => {
       const result = await invoiceRepository.updateStatus(id, input.status, tx);
-      const event = input.status === "PAID" ? "INVOICE_PAID" : "INVOICE_CREATED";
+      const event =
+        input.status === "PAID" ? "INVOICE_PAID" : "INVOICE_CREATED";
       await rfqRepository.createActivity(
         invoice.purchaseOrder.rfqId,
         user.id,
         event as any,
         `Invoice ${invoice.invoiceNumber} status updated to ${input.status}${input.notes ? `: ${input.notes}` : ""}`,
-        tx
+        tx,
       );
       return result;
     });
@@ -244,7 +276,7 @@ export class InvoiceService {
       invoice.purchaseOrder.rfqId,
       user.id,
       "INVOICE_SENT",
-      `Invoice ${invoice.invoiceNumber} emailed to ${recipientEmail}`
+      `Invoice ${invoice.invoiceNumber} emailed to ${recipientEmail}`,
     );
 
     await notificationService.notify(
@@ -252,7 +284,7 @@ export class InvoiceService {
       "INVOICE_SENT",
       "Invoice Emailed",
       `Invoice ${invoice.invoiceNumber} was dispatched to ${recipientEmail}`,
-      `/invoices/${invoice.id}`
+      `/invoices/${invoice.id}`,
     );
 
     return {

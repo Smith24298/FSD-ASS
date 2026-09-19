@@ -86,14 +86,20 @@ export class QuotationRepository {
         notes?: string | null;
       }>;
     },
-    tx?: Tx
+    tx?: Tx,
   ) {
     const client = tx ?? prisma;
+    const rfq = await client.rFQ.findUnique({
+      where: { id: data.rfqId },
+      select: { organizationId: true },
+    });
+    if (!rfq) throw new Error("RFQ not found");
     return client.quotation.create({
       data: {
         quotationNumber: data.quotationNumber,
         rfqId: data.rfqId,
         vendorId: data.vendorId,
+        organizationId: rfq.organizationId,
         status: data.status ?? "SUBMITTED",
         subtotal: data.subtotal,
         tax: data.tax,
@@ -151,7 +157,7 @@ export class QuotationRepository {
         notes?: string | null;
       }>;
     },
-    tx?: Tx
+    tx?: Tx,
   ) {
     const client = tx ?? prisma;
     return client.quotation.update({
@@ -161,12 +167,22 @@ export class QuotationRepository {
         ...(data.status !== undefined ? { status: data.status } : {}),
         ...(data.subtotal !== undefined ? { subtotal: data.subtotal } : {}),
         ...(data.tax !== undefined ? { tax: data.tax } : {}),
-        ...(data.totalAmount !== undefined ? { totalAmount: data.totalAmount } : {}),
+        ...(data.totalAmount !== undefined
+          ? { totalAmount: data.totalAmount }
+          : {}),
         ...(data.currency !== undefined ? { currency: data.currency } : {}),
-        ...(data.paymentTerms !== undefined ? { paymentTerms: data.paymentTerms } : {}),
-        ...(data.deliveryDays !== undefined ? { deliveryDays: data.deliveryDays } : {}),
-        ...(data.deliveryDate !== undefined ? { deliveryDate: data.deliveryDate } : {}),
-        ...(data.validityDays !== undefined ? { validityDays: data.validityDays } : {}),
+        ...(data.paymentTerms !== undefined
+          ? { paymentTerms: data.paymentTerms }
+          : {}),
+        ...(data.deliveryDays !== undefined
+          ? { deliveryDays: data.deliveryDays }
+          : {}),
+        ...(data.deliveryDate !== undefined
+          ? { deliveryDate: data.deliveryDate }
+          : {}),
+        ...(data.validityDays !== undefined
+          ? { validityDays: data.validityDays }
+          : {}),
         ...(data.notes !== undefined ? { notes: data.notes } : {}),
         items: data.items
           ? {
@@ -204,7 +220,7 @@ export class QuotationRepository {
   async updateMany(
     where: Prisma.QuotationWhereInput,
     data: { status?: string },
-    tx?: Tx
+    tx?: Tx,
   ) {
     const client = tx ?? prisma;
     return client.quotation.updateMany({
@@ -233,7 +249,15 @@ export class QuotationRepository {
       orderBy: options.orderBy,
       include: {
         vendor: { select: vendorWithProfileSelect },
-        rfq: { select: { id: true, rfqNumber: true, title: true, status: true, quotationDeadline: true } },
+        rfq: {
+          select: {
+            id: true,
+            rfqNumber: true,
+            title: true,
+            status: true,
+            quotationDeadline: true,
+          },
+        },
         items: { orderBy: { id: "asc" } },
         approval: true,
         purchaseOrder: { select: { id: true, poNumber: true, status: true } },

@@ -8,6 +8,8 @@ export class AuthService {
   async register(data: RegisterBody): Promise<RegisterResponse> {
     const { role, user, profile } = data;
     const { password, ...userData } = user;
+    const organization = await userRepository.findDefaultOrganization();
+    if (!organization) throw new Error("DEFAULT_ORGANIZATION_NOT_FOUND");
 
     const passwordHash = await argon2.hash(password);
 
@@ -16,6 +18,7 @@ export class AuthService {
         ...userData,
         passwordHash,
         role,
+        organizationId: organization.id,
       },
       profile,
     );
@@ -32,7 +35,7 @@ export class AuthService {
 
     const user = await userRepository.findByEmailWithPassword(email);
 
-    if (!user) {
+    if (!user || !user.isActive || !user.organization?.isActive) {
       throw new Error("INVALID_CREDENTIALS");
     }
 
@@ -48,6 +51,7 @@ export class AuthService {
       userName: user.userName,
       name: user.name,
       role: user.role,
+      organizationId: user.organizationId,
     };
 
     const token = await generateToken(payload);

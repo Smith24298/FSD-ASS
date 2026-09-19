@@ -2,6 +2,7 @@ export type Role = "ADMIN" | "VENDOR" | "OFFICR" | "MANAGER";
 
 export interface SafeUser {
   id: number;
+  organizationId: number;
   email: string;
   userName: string;
   name: string;
@@ -93,6 +94,7 @@ export function toEmployeeResponse(
 
 export interface JWTPayload {
   userId: number;
+  organizationId: number;
   email: string;
   userName: string;
   role?: Role;

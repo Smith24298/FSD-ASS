@@ -25,6 +25,7 @@ import InvoiceDetail from "./pages/InvoiceDetail";
 import ActivityTimeline from "./pages/ActivityTimeline";
 import Reports from "./pages/Reports";
 import Notifications from "./pages/Notifications";
+import Users from "./pages/Users";
 
 export default function App() {
   return (
@@ -38,17 +39,14 @@ export default function App() {
           {/* Protected ERP Layout */}
           <Route element={<ProtectedLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
-
             {/* Vendor Management */}
             <Route path="/vendors" element={<Vendors />} />
             <Route path="/vendors/:id" element={<VendorDetail />} />
-
             {/* RFQ Management */}
             <Route path="/rfqs" element={<RFQs />} />
             <Route path="/rfqs/create" element={<RFQCreate />} />
             <Route path="/rfqs/:id" element={<RFQDetail />} />
             <Route path="/rfqs/:rfqId/compare" element={<QuotationCompare />} />
-
             {/* Quotations */}
             <Route path="/quotations" element={<Quotations />} />
             <Route path="/rfqs/:rfqId/quote" element={<QuotationSubmit />} />
@@ -57,31 +55,25 @@ export default function App() {
               element={<QuotationSubmit />}
             />
             <Route path="/quotations/:id" element={<QuotationDetail />} />
-
             {/* Approvals */}
             <Route path="/approvals" element={<Approvals />} />
             <Route path="/approvals/:id" element={<ApprovalDetail />} />
-
             {/* Purchase Orders */}
             <Route path="/purchase-orders" element={<PurchaseOrders />} />
             <Route
               path="/purchase-orders/:id"
               element={<PurchaseOrderDetail />}
             />
-
             {/* Invoices */}
             <Route path="/invoices" element={<Invoices />} />
             <Route path="/invoices/:id" element={<InvoiceDetail />} />
-
             {/* Timeline & Audit Log */}
             <Route path="/activity" element={<ActivityTimeline />} />
-
             {/* Analytics & Reports */}
             <Route path="/reports" element={<Reports />} />
-
             {/* Notifications */}
             <Route path="/notifications" element={<Notifications />} />
-
+            <Route path="/users" element={<Users />} />
             {/* Fallback */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Route>

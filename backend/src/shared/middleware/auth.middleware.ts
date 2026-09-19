@@ -5,13 +5,14 @@ import { JWTPayload } from "jose";
 import { SafeUser, Role } from "../types/index.js";
 
 declare module "fastify" {
-    interface FastifyRequest {
-        user: JWTPayload;
-    }
+  interface FastifyRequest {
+    user: JWTPayload;
+  }
 }
 
 interface AuthClaims {
   userId?: number;
+  organizationId?: number;
   email?: string;
   userName?: string;
   name?: string;
@@ -22,6 +23,7 @@ export const getCurrentUser = (request: FastifyRequest): SafeUser => {
   const claims = request.user as unknown as AuthClaims;
   return {
     id: claims.userId ?? 0,
+    organizationId: claims.organizationId ?? 0,
     email: claims.email ?? "",
     userName: claims.userName ?? "",
     name: claims.name ?? claims.userName ?? "",
@@ -48,30 +50,29 @@ export const validate = (schema: ZodType) => {
 };
 
 export const authenticateUser = async (
-    request: FastifyRequest,
-    reply: FastifyReply
+  request: FastifyRequest,
+  reply: FastifyReply,
 ) => {
-    try {
-        const authHeader = request.headers.authorization;
-        if (!authHeader) {
-            return reply.code(401).send({
-                message: "Authorization header is missing",
-            });
-        }
-        const [scheme, token] = authHeader.split(" ");
-        if (scheme !== "Bearer" || !token) {
-            return reply.code(401).send({
-                message: "Invalid authorization format",
-            });
-        }
-        const { payload } = await verifyToken(token);
-        request.user = payload;
-
-    } catch (error) {
-        return reply.code(401).send({
-            message: "Invalid or expired token",
-        });
+  try {
+    const authHeader = request.headers.authorization;
+    if (!authHeader) {
+      return reply.code(401).send({
+        message: "Authorization header is missing",
+      });
     }
+    const [scheme, token] = authHeader.split(" ");
+    if (scheme !== "Bearer" || !token) {
+      return reply.code(401).send({
+        message: "Invalid authorization format",
+      });
+    }
+    const { payload } = await verifyToken(token);
+    request.user = payload;
+  } catch (error) {
+    return reply.code(401).send({
+      message: "Invalid or expired token",
+    });
+  }
 };
 
 export const checkRole = (...allowedRoles: string[]) => {

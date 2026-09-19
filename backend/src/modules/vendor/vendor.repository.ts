@@ -18,6 +18,7 @@ export class VendorRepository {
       orderBy: options.orderBy,
       select: {
         id: true,
+        organizationId: true,
         email: true,
         userName: true,
         name: true,
@@ -61,6 +62,7 @@ export class VendorRepository {
       },
       select: {
         id: true,
+        organizationId: true,
         email: true,
         userName: true,
         name: true,
@@ -116,7 +118,11 @@ export class VendorRepository {
     });
   }
 
-  async updateProfile(userId: number, data: Prisma.ProfileUpdateInput, tx?: Prisma.TransactionClient) {
+  async updateProfile(
+    userId: number,
+    data: Prisma.ProfileUpdateInput,
+    tx?: Prisma.TransactionClient,
+  ) {
     const client = tx ?? prisma;
     return client.profile.update({
       where: { userId },

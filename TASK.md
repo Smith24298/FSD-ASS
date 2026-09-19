@@ -89,6 +89,26 @@ Signup and authentication were verified in the browser with a real vendor regist
 
 Quotation Management frontend is complete. The quotation list and detail screens use the real API, vendors can create quotations at `/rfqs/:rfqId/quote`, save and edit drafts, submit drafts, and view submitted status. Draft editing is available from both RFQ detail and quotation detail.
 
+## Multi-Organization / Tenant Isolation
+
+Status: IN_PROGRESS
+
+| Area | Status |
+|---|---|
+| Organization schema and backfill migration | COMPLETE |
+| User organization assignment | COMPLETE |
+| JWT organization context | COMPLETE |
+| Organization-aware login | COMPLETE |
+| Tenant-scoped RFQ/vendor lists and direct access | COMPLETE |
+| Tenant-scoped quotation/approval/PO/invoice actions | COMPLETE |
+| Tenant-scoped dashboard and reports | COMPLETE |
+| Tenant-scoped notifications and activities | COMPLETE |
+| Organization-aware user management UI | COMPLETE |
+| Cross-organization API security tests | IN_PROGRESS |
+| Two-organization browser verification | NOT_STARTED |
+
+Migration: `20260919190000_add_organizations_and_tenant_scope` creates and backfills the default organization, then enforces organization foreign keys and indexes. Backend tests now pass 44/44, including notification/activity isolation and dashboard scope checks. Browser verification, attachment isolation, and complete cross-organization mutation coverage remain open. See `QA_REPORT.md` for verified scope and remaining gaps.
+
 ---
 
 ## Completed Implementations

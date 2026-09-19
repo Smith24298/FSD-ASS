@@ -1,6 +1,7 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { notificationService } from "./notification.service";
 import { NotificationParams, NotificationQuery } from "./notification.schema";
+import { getCurrentUser } from "../../shared/middleware/auth.middleware";
 
 export const listNotificationsController = async (
   req: FastifyRequest<{ Querystring: NotificationQuery }>,
@@ -21,7 +22,10 @@ export const unreadCountController = async (
   reply: FastifyReply
 ) => {
   const userId = (req.user as any).userId;
-  const count = await notificationService.unreadCount(userId);
+  const count = await notificationService.unreadCount(
+    userId,
+    getCurrentUser(req).organizationId,
+  );
 
   return reply.code(200).send({
     success: true,
@@ -35,7 +39,11 @@ export const markNotificationReadController = async (
   reply: FastifyReply
 ) => {
   const userId = (req.user as any).userId;
-  const notification = await notificationService.markRead(userId, req.params.id);
+  const notification = await notificationService.markRead(
+    userId,
+    getCurrentUser(req).organizationId,
+    req.params.id,
+  );
 
   if (!notification) {
     return reply.code(404).send({
@@ -56,7 +64,10 @@ export const markAllNotificationsReadController = async (
   reply: FastifyReply
 ) => {
   const userId = (req.user as any).userId;
-  const result = await notificationService.markAllRead(userId);
+  const result = await notificationService.markAllRead(
+    userId,
+    getCurrentUser(req).organizationId,
+  );
 
   return reply.code(200).send({
     success: true,

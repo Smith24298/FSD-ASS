@@ -77,9 +77,14 @@ export class PurchaseOrderRepository {
         total: Prisma.Decimal;
       }>;
     },
-    tx?: Tx
+    tx?: Tx,
   ) {
     const client = tx ?? prisma;
+    const rfq = await client.rFQ.findUnique({
+      where: { id: data.rfqId },
+      select: { organizationId: true },
+    });
+    if (!rfq) throw new Error("RFQ not found");
     return client.purchaseOrder.create({
       data: {
         poNumber: data.poNumber,
@@ -87,6 +92,7 @@ export class PurchaseOrderRepository {
         rfqId: data.rfqId,
         vendorId: data.vendorId,
         createdById: data.createdById,
+        organizationId: rfq.organizationId,
         status: data.status ?? "ISSUED",
         expectedDeliveryDate: data.expectedDeliveryDate,
         subtotal: data.subtotal,

@@ -12,34 +12,67 @@ export class ReportsService {
       invoiceCount,
       totalSpendResult,
     ] = await Promise.all([
-      prisma.rFQ.count(),
-      prisma.quotation.count(),
-      prisma.approvalRequest.count({ where: { status: "APPROVED" } }),
-      prisma.purchaseOrder.count({ where: { status: { not: "CANCELLED" } } }),
-      prisma.invoice.count({ where: { status: { not: "CANCELLED" } } }),
+      prisma.rFQ.count({ where: { organizationId: user.organizationId } }),
+      prisma.quotation.count({
+        where: { organizationId: user.organizationId },
+      }),
+      prisma.approvalRequest.count({
+        where: { status: "APPROVED", organizationId: user.organizationId },
+      }),
+      prisma.purchaseOrder.count({
+        where: {
+          status: { not: "CANCELLED" },
+          organizationId: user.organizationId,
+        },
+      }),
+      prisma.invoice.count({
+        where: {
+          status: { not: "CANCELLED" },
+          organizationId: user.organizationId,
+        },
+      }),
       prisma.purchaseOrder.aggregate({
         _sum: { total: true },
-        where: { status: { not: "CANCELLED" } },
+        where: {
+          status: { not: "CANCELLED" },
+          organizationId: user.organizationId,
+        },
       }),
     ]);
 
-    const totalProcurementSpend = totalSpendResult._sum.total?.toString() ?? "0";
+    const totalProcurementSpend =
+      totalSpendResult._sum.total?.toString() ?? "0";
 
     // 2. Spending by Vendor
     const pos = await prisma.purchaseOrder.findMany({
-      where: { status: { not: "CANCELLED" } },
+      where: {
+        status: { not: "CANCELLED" },
+        organizationId: user.organizationId,
+      },
       include: {
         vendor: {
           select: {
             id: true,
             name: true,
-            profile: { select: { companyName: true, category: true, rating: true } },
+            profile: {
+              select: { companyName: true, category: true, rating: true },
+            },
           },
         },
       },
     });
 
-    const vendorSpendMap = new Map<number, { vendorId: number; name: string; companyName: string; category: string; totalSpend: number; poCount: number }>();
+    const vendorSpendMap = new Map<
+      number,
+      {
+        vendorId: number;
+        name: string;
+        companyName: string;
+        category: string;
+        totalSpend: number;
+        poCount: number;
+      }
+    >();
     for (const po of pos) {
       const vId = po.vendorId;
       const amount = Number(po.total);
@@ -58,21 +91,31 @@ export class ReportsService {
       item.poCount += 1;
     }
 
-    const spendingByVendor = Array.from(vendorSpendMap.values()).sort((a, b) => b.totalSpend - a.totalSpend);
+    const spendingByVendor = Array.from(vendorSpendMap.values()).sort(
+      (a, b) => b.totalSpend - a.totalSpend,
+    );
 
     // 3. Spending by Category
     const categorySpendMap = new Map<string, number>();
     for (const item of spendingByVendor) {
       const cat = item.category || "General";
-      categorySpendMap.set(cat, (categorySpendMap.get(cat) ?? 0) + item.totalSpend);
+      categorySpendMap.set(
+        cat,
+        (categorySpendMap.get(cat) ?? 0) + item.totalSpend,
+      );
     }
-    const spendingByCategory = Array.from(categorySpendMap.entries()).map(([category, amount]) => ({
-      category,
-      amount,
-    }));
+    const spendingByCategory = Array.from(categorySpendMap.entries()).map(
+      ([category, amount]) => ({
+        category,
+        amount,
+      }),
+    );
 
     // 4. Monthly Spending & Activity Trends
-    const monthlyMap = new Map<string, { month: string; spend: number; poCount: number; rfqCount: number }>();
+    const monthlyMap = new Map<
+      string,
+      { month: string; spend: number; poCount: number; rfqCount: number }
+    >();
     for (const po of pos) {
       const date = new Date(po.createdAt);
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
@@ -84,7 +127,10 @@ export class ReportsService {
       m.poCount += 1;
     }
 
-    const rfqs = await prisma.rFQ.findMany({ select: { createdAt: true } });
+    const rfqs = await prisma.rFQ.findMany({
+      where: { organizationId: user.organizationId },
+      select: { createdAt: true },
+    });
     for (const rfq of rfqs) {
       const date = new Date(rfq.createdAt);
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
@@ -94,11 +140,13 @@ export class ReportsService {
       monthlyMap.get(key)!.rfqCount += 1;
     }
 
-    const monthlyTrends = Array.from(monthlyMap.values()).sort((a, b) => a.month.localeCompare(b.month));
+    const monthlyTrends = Array.from(monthlyMap.values()).sort((a, b) =>
+      a.month.localeCompare(b.month),
+    );
 
     // 5. Vendor Performance Analytics
     const vendors = await prisma.user.findMany({
-      where: { role: "VENDOR" },
+      where: { role: "VENDOR", organizationId: user.organizationId },
       include: {
         profile: true,
         vendorInvitations: true,
@@ -111,7 +159,10 @@ export class ReportsService {
           },
         },
         purchaseOrdersAsVendor: {
-          where: { status: { not: "CANCELLED" } },
+          where: {
+            status: { not: "CANCELLED" },
+            organizationId: user.organizationId,
+          },
           select: { total: true },
         },
       },
@@ -120,18 +171,33 @@ export class ReportsService {
     const vendorPerformance = vendors.map((v) => {
       const invitationsCount = v.vendorInvitations.length;
       const quotationsCount = v.quotations.length;
-      const responseRate = invitationsCount > 0 ? Math.round((quotationsCount / invitationsCount) * 100) : 0;
-      const acceptedQuotes = v.quotations.filter((q) => q.status === "APPROVED" || q.status === "AWARDED").length;
-      const rejectedQuotes = v.quotations.filter((q) => q.status === "REJECTED").length;
+      const responseRate =
+        invitationsCount > 0
+          ? Math.round((quotationsCount / invitationsCount) * 100)
+          : 0;
+      const acceptedQuotes = v.quotations.filter(
+        (q) => q.status === "APPROVED" || q.status === "AWARDED",
+      ).length;
+      const rejectedQuotes = v.quotations.filter(
+        (q) => q.status === "REJECTED",
+      ).length;
 
-      const quotesWithDelivery = v.quotations.filter((q) => q.deliveryDays !== null && q.deliveryDays !== undefined);
-      const avgDeliveryDays = quotesWithDelivery.length > 0
-        ? Math.round(quotesWithDelivery.reduce((acc, q) => acc + (q.deliveryDays ?? 0), 0) / quotesWithDelivery.length)
-        : null;
+      const quotesWithDelivery = v.quotations.filter(
+        (q) => q.deliveryDays !== null && q.deliveryDays !== undefined,
+      );
+      const avgDeliveryDays =
+        quotesWithDelivery.length > 0
+          ? Math.round(
+              quotesWithDelivery.reduce(
+                (acc, q) => acc + (q.deliveryDays ?? 0),
+                0,
+              ) / quotesWithDelivery.length,
+            )
+          : null;
 
       const totalProcurementValue = v.purchaseOrdersAsVendor.reduce(
         (acc, po) => acc + Number(po.total),
-        0
+        0,
       );
 
       return {
@@ -170,11 +236,14 @@ export class ReportsService {
 
   async exportCsv(user: SafeUser): Promise<string> {
     const pos = await prisma.purchaseOrder.findMany({
+      where: { organizationId: user.organizationId },
       include: {
         vendor: {
           select: {
             name: true,
-            profile: { select: { companyName: true, category: true, gstNumber: true } },
+            profile: {
+              select: { companyName: true, category: true, gstNumber: true },
+            },
           },
         },
         rfq: { select: { rfqNumber: true, title: true } },

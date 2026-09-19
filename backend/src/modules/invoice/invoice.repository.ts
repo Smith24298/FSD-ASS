@@ -75,14 +75,20 @@ export class InvoiceRepository {
         total: Prisma.Decimal;
       }>;
     },
-    tx?: Tx
+    tx?: Tx,
   ) {
     const client = tx ?? prisma;
+    const po = await client.purchaseOrder.findUnique({
+      where: { id: data.purchaseOrderId },
+      select: { organizationId: true },
+    });
+    if (!po) throw new Error("Purchase order not found");
     return client.invoice.create({
       data: {
         invoiceNumber: data.invoiceNumber,
         purchaseOrderId: data.purchaseOrderId,
         vendorId: data.vendorId,
+        organizationId: po.organizationId,
         status: data.status ?? "ISSUED",
         issueDate: data.issueDate ?? new Date(),
         dueDate: data.dueDate,

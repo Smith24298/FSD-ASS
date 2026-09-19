@@ -18,19 +18,24 @@ export class PurchaseOrderService {
     if (!quotation) {
       throw AppError.notFound("Quotation not found", "QUOTATION_NOT_FOUND");
     }
+    if (quotation.organizationId !== user.organizationId) {
+      throw AppError.notFound("Quotation not found", "QUOTATION_NOT_FOUND");
+    }
 
     if (quotation.status !== "APPROVED" && quotation.status !== "AWARDED") {
       throw AppError.conflict(
         `Cannot generate Purchase Order: Quotation status is ${quotation.status}. It must be APPROVED or AWARDED first.`,
-        "QUOTATION_NOT_APPROVED"
+        "QUOTATION_NOT_APPROVED",
       );
     }
 
-    const existingPo = await purchaseOrderRepository.findByQuotationId(input.quotationId);
+    const existingPo = await purchaseOrderRepository.findByQuotationId(
+      input.quotationId,
+    );
     if (existingPo) {
       throw AppError.conflict(
         `Purchase Order already generated for this quotation (${existingPo.poNumber})`,
-        "PO_ALREADY_EXISTS"
+        "PO_ALREADY_EXISTS",
       );
     }
 
@@ -55,8 +60,14 @@ export class PurchaseOrderService {
       };
     });
 
-    const subtotal = poItems.reduce((acc, i) => acc.add(i.subtotal), new Prisma.Decimal(0));
-    const tax = poItems.reduce((acc, i) => acc.add(i.tax), new Prisma.Decimal(0));
+    const subtotal = poItems.reduce(
+      (acc, i) => acc.add(i.subtotal),
+      new Prisma.Decimal(0),
+    );
+    const tax = poItems.reduce(
+      (acc, i) => acc.add(i.tax),
+      new Prisma.Decimal(0),
+    );
     const total = subtotal.add(tax);
 
     const po = await prisma.$transaction(async (tx) => {
@@ -70,14 +81,14 @@ export class PurchaseOrderService {
           status: "ISSUED",
           expectedDeliveryDate: input.expectedDeliveryDate
             ? new Date(input.expectedDeliveryDate)
-            : quotation.deliveryDate ?? undefined,
+            : (quotation.deliveryDate ?? undefined),
           subtotal,
           tax,
           total,
           notes: input.notes ?? quotation.notes,
           items: poItems,
         },
-        tx
+        tx,
       );
 
       await quotationRepository.updateStatus(quotation.id, "AWARDED", tx);
@@ -88,7 +99,7 @@ export class PurchaseOrderService {
         user.id,
         "PO_CREATED",
         `Purchase Order ${poNumber} created from approved quotation #${quotation.id} for total ${total.toString()} ${quotation.currency}`,
-        tx
+        tx,
       );
 
       await rfqRepository.createActivity(
@@ -96,7 +107,7 @@ export class PurchaseOrderService {
         user.id,
         "PO_ISSUED",
         `Purchase Order ${poNumber} issued to ${quotation.vendor?.name ?? "vendor"}`,
-        tx
+        tx,
       );
 
       return created;
@@ -107,7 +118,7 @@ export class PurchaseOrderService {
       "PO_ISSUED",
       "Purchase Order Issued",
       `Purchase Order ${poNumber} has been issued for ${quotation.rfq?.rfqNumber ?? "RFQ"}. Total: ${total.toString()} ${quotation.currency}`,
-      `/purchase-orders/${po.id}`
+      `/purchase-orders/${po.id}`,
     );
 
     return purchaseOrderRepository.findById(po.id);
@@ -117,7 +128,7 @@ export class PurchaseOrderService {
     const { page, limit, search, status, vendorId, rfqId } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: any = { organizationId: user.organizationId };
 
     if (user.role === "VENDOR") {
       where.vendorId = user.id;
@@ -162,9 +173,15 @@ export class PurchaseOrderService {
     if (!po) {
       throw AppError.notFound("Purchase Order not found", "PO_NOT_FOUND");
     }
+    if (po.organizationId !== user.organizationId) {
+      throw AppError.notFound("Purchase Order not found", "PO_NOT_FOUND");
+    }
 
     if (user.role === "VENDOR" && po.vendorId !== user.id) {
-      throw AppError.forbidden("You are not authorized to view this Purchase Order", "FORBIDDEN");
+      throw AppError.forbidden(
+        "You are not authorized to view this Purchase Order",
+        "FORBIDDEN",
+      );
     }
 
     return po;
@@ -175,25 +192,38 @@ export class PurchaseOrderService {
     if (!po) {
       throw AppError.notFound("Purchase Order not found", "PO_NOT_FOUND");
     }
+    if (po.organizationId !== user.organizationId) {
+      throw AppError.notFound("Purchase Order not found", "PO_NOT_FOUND");
+    }
 
     if (user.role === "VENDOR") {
       if (po.vendorId !== user.id) {
-        throw AppError.forbidden("You cannot modify another vendor's Purchase Order", "FORBIDDEN");
+        throw AppError.forbidden(
+          "You cannot modify another vendor's Purchase Order",
+          "FORBIDDEN",
+        );
       }
       if (input.status !== "CONFIRMED") {
-        throw AppError.forbidden("Vendors may only confirm Purchase Orders", "FORBIDDEN");
+        throw AppError.forbidden(
+          "Vendors may only confirm Purchase Orders",
+          "FORBIDDEN",
+        );
       }
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      const result = await purchaseOrderRepository.updateStatus(id, input.status, tx);
+      const result = await purchaseOrderRepository.updateStatus(
+        id,
+        input.status,
+        tx,
+      );
       const event = input.status === "CANCELLED" ? "PO_CANCELLED" : "PO_ISSUED";
       await rfqRepository.createActivity(
         po.rfqId,
         user.id,
         event as any,
         `Purchase Order ${po.poNumber} status updated to ${input.status}${input.notes ? `: ${input.notes}` : ""}`,
-        tx
+        tx,
       );
       return result;
     });

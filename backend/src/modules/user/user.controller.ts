@@ -1,13 +1,22 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { userService } from "./user.service";
-import { CreateUserInput, UpdateUserInput, UserParams, UserQuery } from "./user.schema";
+import {
+  CreateUserInput,
+  UpdateUserInput,
+  UserParams,
+  UserQuery,
+} from "./user.schema";
+import { getCurrentUser } from "../../shared/middleware/auth.middleware";
 
 export const createUserController = async (
   req: FastifyRequest<{ Body: CreateUserInput }>,
-  reply: FastifyReply
+  reply: FastifyReply,
 ) => {
   try {
-    const user = await userService.createUser(req.body);
+    const user = await userService.createUser(
+      req.body,
+      getCurrentUser(req).organizationId,
+    );
 
     return reply.code(201).send({
       success: true,
@@ -45,10 +54,13 @@ export const createUserController = async (
 
 export const getUsersController = async (
   req: FastifyRequest<{ Querystring: UserQuery }>,
-  reply: FastifyReply
+  reply: FastifyReply,
 ) => {
   try {
-    const result = await userService.getUsers(req.query);
+    const result = await userService.getUsers(
+      req.query,
+      getCurrentUser(req).organizationId,
+    );
 
     return reply.code(200).send({
       success: true,
@@ -66,10 +78,13 @@ export const getUsersController = async (
 
 export const getUserController = async (
   req: FastifyRequest<{ Params: UserParams }>,
-  reply: FastifyReply
+  reply: FastifyReply,
 ) => {
   try {
-    const user = await userService.getUserById(req.params.id);
+    const user = await userService.getUserById(
+      req.params.id,
+      getCurrentUser(req).organizationId,
+    );
 
     if (!user) {
       return reply.code(404).send({
@@ -94,10 +109,14 @@ export const getUserController = async (
 
 export const updateUserController = async (
   req: FastifyRequest<{ Params: UserParams; Body: UpdateUserInput }>,
-  reply: FastifyReply
+  reply: FastifyReply,
 ) => {
   try {
-    const user = await userService.updateUser(req.params.id, req.body);
+    const user = await userService.updateUser(
+      req.params.id,
+      req.body,
+      getCurrentUser(req).organizationId,
+    );
 
     if (!user) {
       return reply.code(404).send({
@@ -142,10 +161,13 @@ export const updateUserController = async (
 
 export const deleteUserController = async (
   req: FastifyRequest<{ Params: UserParams }>,
-  reply: FastifyReply
+  reply: FastifyReply,
 ) => {
   try {
-    const deleted = await userService.deleteUser(req.params.id);
+    const deleted = await userService.deleteUser(
+      req.params.id,
+      getCurrentUser(req).organizationId,
+    );
 
     if (!deleted) {
       return reply.code(404).send({

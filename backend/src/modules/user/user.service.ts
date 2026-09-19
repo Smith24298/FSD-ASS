@@ -4,7 +4,10 @@ import { CreateUserInput, UpdateUserInput, UserQuery } from "./user.schema";
 import { SafeUser, PaginatedResponse, Role } from "./user.types";
 
 export class UserService {
-  async createUser(data: CreateUserInput): Promise<SafeUser> {
+  async createUser(
+    data: CreateUserInput,
+    organizationId: number,
+  ): Promise<SafeUser> {
     const { password, ...userData } = data;
 
     const passwordHash = await argon2.hash(password);
@@ -13,16 +16,20 @@ export class UserService {
       ...userData,
       passwordHash,
       role: data.role,
+      organizationId,
     });
 
     return user;
   }
 
-  async getUsers(query: UserQuery): Promise<PaginatedResponse<SafeUser>> {
+  async getUsers(
+    query: UserQuery,
+    organizationId: number,
+  ): Promise<PaginatedResponse<SafeUser>> {
     const { page, limit, search, role, isActive } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: any = { organizationId };
 
     if (search) {
       where.OR = [
@@ -41,7 +48,12 @@ export class UserService {
     }
 
     const [users, total] = await Promise.all([
-      userRepository.findMany({ where, skip, take: limit, orderBy: { createdAt: "desc" } }),
+      userRepository.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: "desc" },
+      }),
       userRepository.count({ where }),
     ]);
 
@@ -56,19 +68,29 @@ export class UserService {
     };
   }
 
-  async getUserById(id: number): Promise<SafeUser | null> {
-    return userRepository.findById(id);
+  async getUserById(
+    id: number,
+    organizationId: number,
+  ): Promise<SafeUser | null> {
+    const user = await userRepository.findById(id);
+    return user?.organizationId === organizationId ? user : null;
   }
 
   async getUserByEmail(email: string): Promise<SafeUser | null> {
     return userRepository.findByEmail(email);
   }
 
-  async updateUser(id: number, data: UpdateUserInput): Promise<SafeUser | null> {
+  async updateUser(
+    id: number,
+    data: UpdateUserInput,
+    organizationId: number,
+  ): Promise<SafeUser | null> {
+    if (!(await this.getUserById(id, organizationId))) return null;
     return userRepository.update(id, data);
   }
 
-  async deleteUser(id: number): Promise<boolean> {
+  async deleteUser(id: number, organizationId: number): Promise<boolean> {
+    if (!(await this.getUserById(id, organizationId))) return false;
     return userRepository.delete(id);
   }
 

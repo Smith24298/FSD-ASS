@@ -22,11 +22,13 @@ export class UserRepository {
     name: string;
     passwordHash: string;
     role: Role;
+    organizationId: number;
   }): Promise<SafeUser> {
     const user = await prisma.user.create({
       data,
       select: {
         id: true,
+        organizationId: true,
         email: true,
         userName: true,
         name: true,
@@ -46,13 +48,14 @@ export class UserRepository {
       name: string;
       passwordHash: string;
       role: Role;
+      organizationId: number;
     },
     profileData?: {
       gstNumber: string;
       address: string;
       companyName: string;
       mobileNumber: string;
-    }
+    },
   ): Promise<UserWithProfile> {
     const result = await prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
@@ -66,6 +69,7 @@ export class UserRepository {
           data: {
             ...profileData,
             userId: newUser.id,
+            organizationId: userData.organizationId,
           },
         });
       }
@@ -92,6 +96,7 @@ export class UserRepository {
       orderBy: options.orderBy,
       select: {
         id: true,
+        organizationId: true,
         email: true,
         userName: true,
         name: true,
@@ -112,6 +117,7 @@ export class UserRepository {
       where: { id },
       select: {
         id: true,
+        organizationId: true,
         email: true,
         userName: true,
         name: true,
@@ -128,6 +134,7 @@ export class UserRepository {
       where: { email },
       select: {
         id: true,
+        organizationId: true,
         email: true,
         userName: true,
         name: true,
@@ -148,6 +155,13 @@ export class UserRepository {
   async findByEmailWithPassword(email: string) {
     return prisma.user.findUnique({
       where: { email },
+      include: { organization: true },
+    });
+  }
+
+  async findDefaultOrganization() {
+    return prisma.organization.findFirst({
+      where: { slug: "default", isActive: true },
     });
   }
 
@@ -160,6 +174,7 @@ export class UserRepository {
       data,
       select: {
         id: true,
+        organizationId: true,
         email: true,
         userName: true,
         name: true,
