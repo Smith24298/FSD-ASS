@@ -1,0 +1,21 @@
+node_modules/
+dist/
+coverage/
+*.log
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Local assistant/tool metadata
+.agents/
+.claude/
+.windsurf/
+.cursor/
+.gemini/
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/

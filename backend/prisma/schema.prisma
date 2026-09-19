@@ -1,0 +1,458 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Profile {
+  id           Int          @id @default(autoincrement())
+  gstNumber    String       @unique
+  address      String
+  companyName  String
+  vendorCode   String?      @unique
+  category     String?
+  status       VendorStatus @default(ACTIVE)
+  rating       Decimal?     @default(4.5)
+  createdAt    DateTime     @default(now())
+  updateAt     DateTime     @updatedAt
+  userId       Int          @unique
+  mobileNumber String
+  user         User         @relation(fields: [userId], references: [id])
+}
+
+model RFQ {
+  id                   Int                    @id @default(autoincrement())
+  rfqNumber            String                 @unique
+  title                String
+  description          String?
+  status               RFQStatus              @default(DRAFT)
+  priority             RFQPriority            @default(MEDIUM)
+  requestedById        Int                    @map("createdBy")
+  quotationDeadline    DateTime?              @map("quotationDeadline")
+  expectedDeliveryDate DateTime?
+  publishedAt          DateTime?
+  closedAt             DateTime?
+  cancelledAt          DateTime?
+  cancellationReason   String?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  requestedBy    User              @relation("RequestedRFQs", fields: [requestedById], references: [id])
+  items          RFQItem[]
+  vendors        RFQVendor[]
+  attachments    RFQAttachment[]
+  activities     RFQActivity[]
+  quotations     Quotation[]
+  approvals      ApprovalRequest[]
+  purchaseOrders PurchaseOrder[]
+
+  @@index([status])
+  @@index([requestedById])
+  @@index([createdAt])
+  @@index([quotationDeadline])
+  @@index([priority])
+}
+
+model RFQItem {
+  id                    Int               @id @default(autoincrement())
+  rfqId                 Int
+  productId             Int?
+  name                  String
+  description           String?
+  quantity              Int               @map("Quantity")
+  unit                  String?
+  technicalRequirements String?
+  expectedDeliveryDate  DateTime?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  rfq                   RFQ               @relation(fields: [rfqId], references: [id])
+  quotations            QuotationItem[]
+  poItems               PurchaseOrderItem[]
+
+  @@index([rfqId])
+  @@index([productId])
+}
+
+model RFQVendor {
+  id            Int                 @id @default(autoincrement())
+  rfqId         Int
+  vendorId      Int
+  status        RFQInvitationStatus @default(INVITED)
+  invitedAt     DateTime            @default(now())
+  viewedAt      DateTime?
+  respondedAt   DateTime?
+  declineReason String?
+  rfq           RFQ                 @relation(fields: [rfqId], references: [id])
+  vendor        User                @relation("VendorInvitations", fields: [vendorId], references: [id])
+
+  @@unique([rfqId, vendorId])
+  @@index([rfqId])
+  @@index([vendorId])
+  @@index([status])
+}
+
+model RFQAttachment {
+  id           Int      @id @default(autoincrement())
+  rfqId        Int
+  filename     String
+  storageKey   String   @unique
+  mimeType     String
+  size         Int
+  uploadedById Int
+  createdAt    DateTime @default(now())
+  rfq          RFQ      @relation(fields: [rfqId], references: [id])
+  uploadedBy   User     @relation("UploadedAttachments", fields: [uploadedById], references: [id])
+
+  @@index([rfqId])
+}
+
+model RFQActivity {
+  id        Int           @id @default(autoincrement())
+  rfqId     Int
+  userId    Int
+  event     ActivityEvent
+  details   String?
+  createdAt DateTime      @default(now())
+  rfq       RFQ           @relation(fields: [rfqId], references: [id])
+  user      User          @relation("UserActivities", fields: [userId], references: [id])
+
+  @@index([rfqId])
+  @@index([createdAt])
+  @@index([event])
+}
+
+model Quotation {
+  id              Int              @id @default(autoincrement())
+  quotationNumber String?          @unique
+  rfqId           Int
+  vendorId        Int
+  status          QuotationStatus  @default(SUBMITTED)
+  subtotal        Decimal?         @default(0)
+  tax             Decimal?         @default(0)
+  totalAmount     Decimal          @map("totalAmount")
+  currency        String           @default("INR")
+  paymentTerms    String?
+  validityDays    Int?
+  deliveryDays    Int?
+  deliveryDate    DateTime?
+  notes           String?
+  submittedAt     DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  rfq             RFQ              @relation(fields: [rfqId], references: [id])
+  vendor          User             @relation("VendorQuotations", fields: [vendorId], references: [id])
+  items           QuotationItem[]
+  approval        ApprovalRequest?
+  purchaseOrder   PurchaseOrder?
+
+  @@unique([rfqId, vendorId])
+  @@index([rfqId])
+  @@index([vendorId])
+  @@index([status])
+}
+
+model QuotationItem {
+  id          Int       @id @default(autoincrement())
+  quotationId Int
+  rfqItemId   Int?
+  name        String
+  description String?
+  quantity    Int
+  unit        String?
+  unitPrice   Decimal
+  tax         Decimal?  @default(0)
+  subtotal    Decimal?
+  notes       String?
+  quotation   Quotation @relation(fields: [quotationId], references: [id])
+  rfqItem     RFQItem?  @relation(fields: [rfqItemId], references: [id])
+
+  @@index([quotationId])
+  @@index([rfqItemId])
+}
+
+model ApprovalRequest {
+  id            Int            @id @default(autoincrement())
+  rfqId         Int
+  quotationId   Int            @unique
+  requestedById Int
+  approvedById  Int?
+  status        ApprovalStatus @default(PENDING)
+  requestedAt   DateTime       @default(now())
+  decidedAt     DateTime?
+  comment       String?
+  rfq           RFQ            @relation(fields: [rfqId], references: [id])
+  quotation     Quotation      @relation(fields: [quotationId], references: [id])
+  requestedBy   User           @relation("ApprovalRequesters", fields: [requestedById], references: [id])
+  approvedBy    User?          @relation("ApprovalDeciders", fields: [approvedById], references: [id])
+
+  @@index([rfqId])
+  @@index([status])
+}
+
+model PurchaseOrder {
+  id                   Int                 @id @default(autoincrement())
+  poNumber             String              @unique
+  quotationId          Int                 @unique
+  rfqId                Int
+  vendorId             Int
+  createdById          Int
+  status               POStatus            @default(ISSUED)
+  issueDate            DateTime            @default(now())
+  expectedDeliveryDate DateTime?
+  subtotal             Decimal
+  tax                  Decimal             @default(0)
+  total                Decimal
+  notes                String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  quotation   Quotation           @relation(fields: [quotationId], references: [id])
+  rfq         RFQ                 @relation(fields: [rfqId], references: [id])
+  vendor      User                @relation("VendorPurchaseOrders", fields: [vendorId], references: [id])
+  createdBy   User                @relation("CreatedPurchaseOrders", fields: [createdById], references: [id])
+  items       PurchaseOrderItem[]
+  invoice     Invoice?
+
+  @@index([rfqId])
+  @@index([vendorId])
+  @@index([status])
+  @@index([poNumber])
+}
+
+model PurchaseOrderItem {
+  id              Int           @id @default(autoincrement())
+  purchaseOrderId Int
+  rfqItemId       Int?
+  name            String
+  description     String?
+  quantity        Int
+  unit            String?
+  unitPrice       Decimal
+  tax             Decimal       @default(0)
+  subtotal        Decimal
+  total           Decimal
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  rfqItem         RFQItem?      @relation(fields: [rfqItemId], references: [id])
+
+  @@index([purchaseOrderId])
+}
+
+model Invoice {
+  id              Int           @id @default(autoincrement())
+  invoiceNumber   String        @unique
+  purchaseOrderId Int           @unique
+  vendorId        Int
+  issueDate       DateTime      @default(now())
+  dueDate         DateTime?
+  subtotal        Decimal
+  tax             Decimal       @default(0)
+  total           Decimal
+  status          InvoiceStatus @default(ISSUED)
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  vendor        User          @relation("VendorInvoices", fields: [vendorId], references: [id])
+  items         InvoiceItem[]
+
+  @@index([purchaseOrderId])
+  @@index([vendorId])
+  @@index([status])
+  @@index([invoiceNumber])
+}
+
+model InvoiceItem {
+  id          Int      @id @default(autoincrement())
+  invoiceId   Int
+  name        String
+  description String?
+  quantity    Int
+  unit        String?
+  unitPrice   Decimal
+  tax         Decimal  @default(0)
+  subtotal    Decimal
+  total       Decimal
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
+model Notification {
+  id        Int              @id @default(autoincrement())
+  userId    Int
+  type      NotificationType
+  title     String
+  message   String?
+  link      String?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  user      User             @relation("UserNotifications", fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+model User {
+  id               Int        @id @default(autoincrement())
+  email            String     @unique
+  passwordHash     String
+  userName         String     @unique
+  name             String
+  role             Role
+  profile          Profile?
+  rfqs             RFQ[]      @relation("RequestedRFQs")
+  employeesCreated Employee[] @relation("AdminEmployees")
+  employeeRecord   Employee?  @relation("EmployeeUser")
+  isActive         Boolean    @default(true)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  vendorInvitations       RFQVendor[]       @relation("VendorInvitations")
+  quotations              Quotation[]       @relation("VendorQuotations")
+  uploadedAttachments     RFQAttachment[]   @relation("UploadedAttachments")
+  activities              RFQActivity[]     @relation("UserActivities")
+  approvalRequestsMade    ApprovalRequest[] @relation("ApprovalRequesters")
+  approvalRequestsDecided ApprovalRequest[] @relation("ApprovalDeciders")
+  notifications           Notification[]    @relation("UserNotifications")
+  purchaseOrdersAsVendor  PurchaseOrder[]   @relation("VendorPurchaseOrders")
+  purchaseOrdersCreated   PurchaseOrder[]   @relation("CreatedPurchaseOrders")
+  invoicesAsVendor        Invoice[]         @relation("VendorInvoices")
+}
+
+model Employee {
+  id         Int      @id @default(autoincrement())
+  adminId    Int
+  employeeId Int      @unique
+  isActive   Boolean  @default(true)
+  admin      User     @relation(name: "AdminEmployees", fields: [adminId], references: [id])
+  employee   User     @relation(name: "EmployeeUser", fields: [employeeId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+enum Role {
+  ADMIN
+  VENDOR
+  OFFICR
+  MANAGER
+}
+
+enum VendorStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+  SUSPENDED
+}
+
+enum RFQStatus {
+  DRAFT
+  PUBLISHED
+  OPEN
+  CLOSED
+  UNDER_REVIEW
+  SHORTLISTED
+  AWAITING_APPROVAL
+  AWARDED
+  CANCELLED
+  EXPIRED
+}
+
+enum RFQPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum RFQInvitationStatus {
+  INVITED
+  VIEWED
+  QUOTATION_SUBMITTED
+  DECLINED
+  EXPIRED
+}
+
+enum QuotationStatus {
+  DRAFT
+  SUBMITTED
+  SHORTLISTED
+  AWAITING_APPROVAL
+  APPROVED
+  REJECTED
+  AWARDED
+  REVOKED
+  WITHDRAWN
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum POStatus {
+  DRAFT
+  ISSUED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  CANCELLED
+  OVERDUE
+}
+
+enum ActivityEvent {
+  RFQ_CREATED
+  RFQ_UPDATED
+  RFQ_PUBLISHED
+  VENDOR_INVITED
+  RFQ_VIEWED
+  ATTACHMENT_UPLOADED
+  RFQ_CANCELLED
+  RFQ_EXPIRED
+  RFQ_CLOSED
+  RFQ_UNDER_REVIEW
+  QUOTATION_SUBMITTED
+  QUOTATION_UPDATED
+  QUOTATION_SHORTLISTED
+  APPROVAL_REQUESTED
+  APPROVAL_DECISION
+  RFQ_AWARDED
+  QUOTATION_REJECTED
+  PO_CREATED
+  PO_ISSUED
+  PO_CANCELLED
+  PO_COMPLETED
+  INVOICE_CREATED
+  INVOICE_SENT
+  INVOICE_PAID
+  VENDOR_CREATED
+  VENDOR_UPDATED
+  VENDOR_STATUS_CHANGED
+}
+
+enum NotificationType {
+  RFQ_PUBLISHED
+  VENDOR_INVITED
+  RFQ_DEADLINE_APPROACHING
+  RFQ_CANCELLED
+  QUOTATION_SUBMITTED
+  QUOTATION_SHORTLISTED
+  APPROVAL_REQUESTED
+  APPROVAL_DECISION
+  RFQ_AWARDED
+  PO_CREATED
+  PO_ISSUED
+  INVOICE_GENERATED
+  INVOICE_SENT
+}
