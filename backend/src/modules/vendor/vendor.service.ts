@@ -146,6 +146,9 @@ export class VendorService {
     if (!vendor) {
       throw AppError.notFound("Vendor not found", "VENDOR_NOT_FOUND");
     }
+    if (vendor.organizationId !== user.organizationId) {
+      throw AppError.notFound("Vendor not found", "VENDOR_NOT_FOUND");
+    }
 
     if (user.role === "VENDOR" && user.id !== id) {
       throw AppError.forbidden(
@@ -195,6 +198,9 @@ export class VendorService {
   ) {
     const vendor = await vendorRepository.findById(id);
     if (!vendor) {
+      throw AppError.notFound("Vendor not found", "VENDOR_NOT_FOUND");
+    }
+    if (vendor.organizationId !== user.organizationId) {
       throw AppError.notFound("Vendor not found", "VENDOR_NOT_FOUND");
     }
 

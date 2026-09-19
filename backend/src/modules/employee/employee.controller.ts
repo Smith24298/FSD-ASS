@@ -1,14 +1,15 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { employeeService } from "./employee.service";
 import { CreateEmployeeInput, UpdateEmployeeInput, EmployeeStatusInput, EmployeeParams, EmployeeQuery } from "./employee.schema";
+import { getCurrentUser } from "../../shared/middleware/auth.middleware";
 
 export const createEmployeeController = async (
   req: FastifyRequest<{ Body: CreateEmployeeInput }>,
   reply: FastifyReply
 ) => {
   try {
-    const adminId = (req.user as any).userId;
-    const employee = await employeeService.createEmployee(adminId, req.body);
+    const currentUser = getCurrentUser(req);
+    const employee = await employeeService.createEmployee(currentUser.id, currentUser.organizationId, req.body);
 
     return reply.code(201).send({
       success: true,
@@ -21,6 +22,12 @@ export const createEmployeeController = async (
         return reply.code(404).send({
           success: false,
           message: "User not found",
+        });
+      }
+      if (error.message === "EMPLOYEE_WRONG_ORGANIZATION") {
+        return reply.code(403).send({
+          success: false,
+          message: "Cannot assign user from another organization as employee",
         });
       }
       if (error.message === "EMPLOYEE_ALREADY_ASSIGNED") {

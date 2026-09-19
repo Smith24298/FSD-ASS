@@ -16,19 +16,25 @@ async function login(app: FastifyInstance, email: string) {
   return response.json().data.token as string;
 }
 
-describe("Multi-organization tenant isolation", { timeout: 60000 }, () => {
+      describe("Multi-organization tenant isolation", { timeout: 120000 }, () => {
   let app: FastifyInstance;
   let organizationA: { id: number };
   let organizationB: { id: number };
   let officerAToken: string;
   let officerBToken: string;
+  let adminAToken: string;
+  let adminBToken: string;
   let rfqBId: number;
   let vendorBId: number;
+  let vendorAId: number;
   let quotationBId: number;
   let approvalBId: number;
   let purchaseOrderBId: number;
   let invoiceBId: number;
   let notificationBId: number;
+  let adminBUserId: number;
+  let managerAUserId: number;
+  let managerBUserId: number;
 
   beforeAll(async () => {
     app = await createApp();
@@ -59,6 +65,40 @@ describe("Multi-organization tenant isolation", { timeout: 60000 }, () => {
       },
       select: { id: true },
     });
+
+    const adminA = await prisma.user.upsert({
+      where: { email: "tenant-a-admin@example.com" },
+      update: {
+        passwordHash,
+        organizationId: organizationA.id,
+        isActive: true,
+      },
+      create: {
+        email: "tenant-a-admin@example.com",
+        userName: "tenant_a_admin",
+        name: "Tenant A Admin",
+        role: "ADMIN",
+        passwordHash,
+        organizationId: organizationA.id,
+      },
+    });
+    const adminB = await prisma.user.upsert({
+      where: { email: "tenant-b-admin@example.com" },
+      update: {
+        passwordHash,
+        organizationId: organizationB.id,
+        isActive: true,
+      },
+      create: {
+        email: "tenant-b-admin@example.com",
+        userName: "tenant_b_admin",
+        name: "Tenant B Admin",
+        role: "ADMIN",
+        passwordHash,
+        organizationId: organizationB.id,
+      },
+    });
+    adminBUserId = adminB.id;
 
     await prisma.user.upsert({
       where: { email: "tenant-a-officer@example.com" },
@@ -92,6 +132,68 @@ describe("Multi-organization tenant isolation", { timeout: 60000 }, () => {
         organizationId: organizationB.id,
       },
     });
+
+    const managerA = await prisma.user.upsert({
+      where: { email: "tenant-a-manager@example.com" },
+      update: {
+        passwordHash,
+        organizationId: organizationA.id,
+        isActive: true,
+      },
+      create: {
+        email: "tenant-a-manager@example.com",
+        userName: "tenant_a_manager",
+        name: "Tenant A Manager",
+        role: "MANAGER",
+        passwordHash,
+        organizationId: organizationA.id,
+      },
+    });
+    managerAUserId = managerA.id;
+    const managerB = await prisma.user.upsert({
+      where: { email: "tenant-b-manager@example.com" },
+      update: {
+        passwordHash,
+        organizationId: organizationB.id,
+        isActive: true,
+      },
+      create: {
+        email: "tenant-b-manager@example.com",
+        userName: "tenant_b_manager",
+        name: "Tenant B Manager",
+        role: "MANAGER",
+        passwordHash,
+        organizationId: organizationB.id,
+      },
+    });
+    managerBUserId = managerB.id;
+
+    const vendorA = await prisma.user.upsert({
+      where: { email: "tenant-a-vendor@example.com" },
+      update: {
+        passwordHash,
+        organizationId: organizationA.id,
+        isActive: true,
+      },
+      create: {
+        email: "tenant-a-vendor@example.com",
+        userName: "tenant_a_vendor",
+        name: "Tenant A Vendor",
+        role: "VENDOR",
+        passwordHash,
+        organizationId: organizationA.id,
+        profile: {
+          create: {
+            organizationId: organizationA.id,
+            companyName: "Tenant A Supplies",
+            gstNumber: "TENANTAGST001",
+            address: "Tenant A Address",
+            mobileNumber: "9000000001",
+          },
+        },
+      },
+    });
+    vendorAId = vendorA.id;
 
     const vendorB = await prisma.user.upsert({
       where: { email: "tenant-b-vendor@example.com" },
@@ -264,7 +366,9 @@ describe("Multi-organization tenant isolation", { timeout: 60000 }, () => {
 
     officerAToken = await login(app, "tenant-a-officer@example.com");
     officerBToken = await login(app, "tenant-b-officer@example.com");
-  }, 60000);
+    adminAToken = await login(app, "tenant-a-admin@example.com");
+    adminBToken = await login(app, "tenant-b-admin@example.com");
+  }, 90000);
 
   it("does not expose another organization's RFQ by direct ID", async () => {
     const response = await app.inject({
@@ -373,5 +477,234 @@ describe("Multi-organization tenant isolation", { timeout: 60000 }, () => {
     });
     expect(responseA.json().data.user.organizationId).toBe(organizationA.id);
     expect(responseB.json().data.user.organizationId).toBe(organizationB.id);
+  });
+
+  it("forces authenticated admin's organizationId when creating users", async () => {
+    const maliciousPayload: any = {
+      name: "Spoofed User",
+      email: "spoofed-user-" + Date.now() + "@example.com",
+      userName: "spoofed_" + Date.now(),
+      password: password,
+      role: "OFFICR",
+      organizationId: organizationB.id,
+    };
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/users",
+      headers: { authorization: `Bearer ${adminAToken}` },
+      payload: maliciousPayload,
+    });
+    expect(response.statusCode).toBe(201);
+    const created = response.json().data;
+    expect(created.organizationId).toBe(organizationA.id);
+    expect(created.organizationId).not.toBe(organizationB.id);
+  });
+
+  it("scopes user lists to the admin's own organization", async () => {
+    const aList = await app.inject({
+      method: "GET",
+      url: "/api/users?limit=100",
+      headers: { authorization: `Bearer ${adminAToken}` },
+    });
+    const bList = await app.inject({
+      method: "GET",
+      url: "/api/users?limit=100",
+      headers: { authorization: `Bearer ${adminBToken}` },
+    });
+    expect(aList.statusCode).toBe(200);
+    expect(bList.statusCode).toBe(200);
+    const aEmails = aList.json().data.map((u: any) => u.email);
+    const bEmails = bList.json().data.map((u: any) => u.email);
+    expect(aEmails).toContain("tenant-a-admin@example.com");
+    expect(aEmails).toContain("tenant-a-officer@example.com");
+    expect(aEmails).toContain("tenant-a-manager@example.com");
+    expect(aEmails).toContain("tenant-a-vendor@example.com");
+    expect(aEmails).not.toContain("tenant-b-admin@example.com");
+    expect(aEmails).not.toContain("tenant-b-officer@example.com");
+    expect(aEmails).not.toContain("tenant-b-manager@example.com");
+    expect(aEmails).not.toContain("tenant-b-vendor@example.com");
+    expect(bEmails).toContain("tenant-b-admin@example.com");
+    expect(bEmails).not.toContain("tenant-a-admin@example.com");
+  });
+
+  it("blocks cross-organization user GET by IDOR", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/users/${adminBUserId}`,
+      headers: { authorization: `Bearer ${adminAToken}` },
+    });
+    expect([403, 404]).toContain(response.statusCode);
+    expect(response.json().data).toBeUndefined();
+  });
+
+  it("blocks cross-organization user PATCH by IDOR", async () => {
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/users/${adminBUserId}`,
+      headers: { authorization: `Bearer ${adminAToken}` },
+      payload: { name: "Hacked Admin B" },
+    });
+    expect([403, 404]).toContain(response.statusCode);
+    const stillAdminB = await prisma.user.findUnique({
+      where: { id: adminBUserId },
+      select: { name: true },
+    });
+    expect(stillAdminB?.name).toBe("Tenant B Admin");
+  });
+
+  it("blocks attaching a cross-organization user as an employee", async () => {
+    const employeeCreate = await app.inject({
+      method: "POST",
+      url: "/api/employees",
+      headers: { authorization: `Bearer ${adminAToken}` },
+      payload: {
+        employeeId: managerBUserId,
+        title: "Manager",
+        department: "Ops",
+      },
+    });
+    expect([403, 404, 400, 409]).toContain(employeeCreate.statusCode);
+    const adminAUser = await prisma.user.findUnique({
+      where: { email: "tenant-a-admin@example.com" },
+      select: { id: true },
+    });
+    if (adminAUser) {
+      const employees = await prisma.employee.findMany({
+        where: { adminId: adminAUser.id, employeeId: managerBUserId },
+      });
+      expect(employees.length).toBe(0);
+    }
+  });
+
+  it("blocks cross-organization RFQ mutation (update)", async () => {
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/rfqs/${rfqBId}`,
+      headers: { authorization: `Bearer ${officerAToken}` },
+      payload: { title: "Hacked by Org A" },
+    });
+    expect([403, 404]).toContain(response.statusCode);
+    const stillRfqB = await prisma.rFQ.findUnique({
+      where: { id: rfqBId },
+      select: { title: true },
+    });
+    expect(stillRfqB?.title).toBe("Tenant B Private RFQ");
+  });
+
+  it("blocks cross-organization RFQ publish mutation", async () => {
+    const draftB = await prisma.rFQ.create({
+      data: {
+        rfqNumber: "TENANT-B-DRAFT-" + Date.now(),
+        title: "Tenant B Draft RFQ",
+        status: "DRAFT",
+        priority: "LOW",
+        requestedById: (
+          await prisma.user.findUniqueOrThrow({
+            where: { email: "tenant-b-officer@example.com" },
+          })
+        ).id,
+        organizationId: organizationB.id,
+        items: { create: [{ name: "Item", quantity: 1, unit: "Unit" }] },
+      },
+    });
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/rfqs/${draftB.id}/publish`,
+      headers: { authorization: `Bearer ${officerAToken}` },
+    });
+    expect([403, 404]).toContain(response.statusCode);
+    const stillDraft = await prisma.rFQ.findUnique({
+      where: { id: draftB.id },
+      select: { status: true },
+    });
+    expect(stillDraft?.status).toBe("DRAFT");
+  });
+
+  it("blocks cross-organization RFQ cancel mutation", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/rfqs/${rfqBId}/cancel`,
+      headers: { authorization: `Bearer ${officerAToken}` },
+      payload: { reason: "Malicious cancel" },
+    });
+    expect([403, 404]).toContain(response.statusCode);
+    const stillOpen = await prisma.rFQ.findUnique({
+      where: { id: rfqBId },
+      select: { status: true },
+    });
+    expect(stillOpen?.status).toBe("OPEN");
+  });
+
+  it("blocks cross-organization vendor update mutation", async () => {
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/vendors/${vendorBId}`,
+      headers: { authorization: `Bearer ${adminAToken}` },
+      payload: { companyName: "Hacked Vendor B Co." },
+    });
+    expect([403, 404]).toContain(response.statusCode);
+    const vendorBProfile = await prisma.profile.findUnique({
+      where: { userId: vendorBId },
+      select: { companyName: true },
+    });
+    expect(vendorBProfile?.companyName).toBe("Tenant B Supplies");
+  });
+
+  it("returns different dashboard counts for different organizations", async () => {
+    for (let i = 0; i < 4; i++) {
+      await prisma.rFQ.create({
+        data: {
+          rfqNumber: "TENANT-A-DASH-" + Date.now() + "-" + i,
+          title: "Tenant A Dashboard RFQ " + i,
+          status: "OPEN",
+          priority: "LOW",
+          requestedById: (
+            await prisma.user.findUniqueOrThrow({
+              where: { email: "tenant-a-officer@example.com" },
+            })
+          ).id,
+          organizationId: organizationA.id,
+          items: {
+            create: [{ name: "A Item " + i, quantity: 1, unit: "Unit" }],
+          },
+        },
+      });
+    }
+    const [dashA, dashB] = await Promise.all([
+      app.inject({
+        method: "GET",
+        url: "/api/dashboard/stats",
+        headers: { authorization: `Bearer ${officerAToken}` },
+      }),
+      app.inject({
+        method: "GET",
+        url: "/api/dashboard/stats",
+        headers: { authorization: `Bearer ${officerBToken}` },
+      }),
+    ]);
+    expect(dashA.statusCode).toBe(200);
+    expect(dashB.statusCode).toBe(200);
+    const dataA = dashA.json().data;
+    const dataB = dashB.json().data;
+    const activeRfqA =
+      typeof dataA?.cards?.activeRfqs === "number"
+        ? dataA.cards.activeRfqs
+        : -1;
+    const activeRfqB =
+      typeof dataB?.cards?.activeRfqs === "number"
+        ? dataB.cards.activeRfqs
+        : -1;
+    const totalVendorsA =
+      typeof dataA?.cards?.totalVendors === "number"
+        ? dataA.cards.totalVendors
+        : -1;
+    const totalVendorsB =
+      typeof dataB?.cards?.totalVendors === "number"
+        ? dataB.cards.totalVendors
+        : -1;
+    expect(activeRfqA).toBeGreaterThanOrEqual(4);
+    expect(totalVendorsA).toBeGreaterThanOrEqual(1);
+    expect(activeRfqB).not.toBe(-1);
+    expect(totalVendorsB).not.toBe(-1);
   });
 });

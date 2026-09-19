@@ -139,6 +139,9 @@ class RfqService {
     if (!rfq) {
       throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
     }
+    if (rfq.organizationId !== user.organizationId) {
+      throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
+    }
     if (rfq.status !== "DRAFT") {
       throw AppError.conflict(
         `Only draft RFQs can be published (current: ${rfq.status})`,
@@ -195,6 +198,9 @@ class RfqService {
   async update(user: SafeUser, rfqId: number, input: UpdateRfqInput) {
     const rfq = await rfqRepository.findUniqueById(rfqId);
     if (!rfq) {
+      throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
+    }
+    if (rfq.organizationId !== user.organizationId) {
       throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
     }
     if (rfq.status !== "DRAFT") {
@@ -256,6 +262,9 @@ class RfqService {
     if (!rfq) {
       throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
     }
+    if (rfq.organizationId !== user.organizationId) {
+      throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
+    }
     if (
       rfq.status === "CANCELLED" ||
       rfq.status === "EXPIRED" ||
@@ -315,6 +324,9 @@ class RfqService {
     if (!rfq) {
       throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
     }
+    if (rfq.organizationId !== user.organizationId) {
+      throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
+    }
     if (rfq.status !== "PUBLISHED" && rfq.status !== "OPEN") {
       throw AppError.conflict(
         "Only published RFQs can be closed early",
@@ -350,6 +362,9 @@ class RfqService {
   async review(user: SafeUser, rfqId: number) {
     let rfq = await rfqRepository.findUniqueById(rfqId);
     if (!rfq) {
+      throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
+    }
+    if (rfq.organizationId !== user.organizationId) {
       throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
     }
 
@@ -669,6 +684,9 @@ class RfqService {
     if (!rfq) {
       throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
     }
+    if (rfq.organizationId !== user.organizationId) {
+      throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
+    }
     if (
       rfq.status === "CANCELLED" ||
       rfq.status === "EXPIRED" ||
@@ -726,6 +744,9 @@ class RfqService {
   async removeVendor(user: SafeUser, rfqId: number, vendorId: number) {
     const rfq = await rfqRepository.findUniqueById(rfqId);
     if (!rfq) {
+      throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
+    }
+    if (rfq.organizationId !== user.organizationId) {
       throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
     }
     if (
@@ -818,6 +839,9 @@ class RfqService {
     if (!rfq) {
       throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
     }
+    if (rfq.organizationId !== user.organizationId) {
+      throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
+    }
     if (
       rfq.status === "CANCELLED" ||
       rfq.status === "EXPIRED" ||
@@ -861,6 +885,9 @@ class RfqService {
     if (!rfq) {
       throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
     }
+    if (rfq.organizationId !== user.organizationId) {
+      throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
+    }
     if (
       rfq.status !== "DRAFT" &&
       rfq.status !== "PUBLISHED" &&
@@ -888,9 +915,13 @@ class RfqService {
       throw AppError.notFound("Attachment not found", "ATTACHMENT_NOT_FOUND");
     }
 
+    const rfq = await rfqRepository.findUniqueById(rfqId);
+    if (!rfq || rfq.organizationId !== user.organizationId) {
+      throw AppError.notFound("Attachment not found", "ATTACHMENT_NOT_FOUND");
+    }
+
     if (user.role === "VENDOR") {
-      const rfq = await rfqRepository.findUniqueById(rfqId);
-      if (!rfq || rfq.status === "DRAFT") {
+      if (rfq.status === "DRAFT") {
         throw AppError.notFound("Attachment not found", "ATTACHMENT_NOT_FOUND");
       }
       const invitation = await rfqRepository.findInvitation(rfqId, user.id);
@@ -912,6 +943,9 @@ class RfqService {
   async award(user: SafeUser, rfqId: number, quotationId: number) {
     const rfq = await rfqRepository.findUniqueById(rfqId);
     if (!rfq) {
+      throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
+    }
+    if (rfq.organizationId !== user.organizationId) {
       throw AppError.notFound("RFQ not found", "RFQ_NOT_FOUND");
     }
     if (

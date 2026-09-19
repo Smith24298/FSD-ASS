@@ -8,7 +8,8 @@ export const listNotificationsController = async (
   reply: FastifyReply,
 ) => {
   const userId = (req.user as any).userId;
-  const result = await notificationService.list(userId, req.query);
+  const currentUser = getCurrentUser(req);
+  const result = await notificationService.list(userId, currentUser.organizationId, req.query);
 
   return reply.code(200).send({
     success: true,

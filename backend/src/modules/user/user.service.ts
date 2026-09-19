@@ -84,9 +84,21 @@ export class UserService {
     id: number,
     data: UpdateUserInput,
     organizationId: number,
+    caller: SafeUser,
   ): Promise<SafeUser | null> {
     if (!(await this.getUserById(id, organizationId))) return null;
-    return userRepository.update(id, data);
+
+    const sanitized: Partial<UpdateUserInput> & { organizationId?: never } = {
+      ...data,
+    };
+    delete (sanitized as any).organizationId;
+
+    if (caller.role !== "ADMIN") {
+      delete (sanitized as any).role;
+      delete (sanitized as any).isActive;
+    }
+
+    return userRepository.update(id, sanitized as any);
   }
 
   async deleteUser(id: number, organizationId: number): Promise<boolean> {

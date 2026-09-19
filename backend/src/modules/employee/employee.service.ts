@@ -4,13 +4,17 @@ import { CreateEmployeeInput, UpdateEmployeeInput, EmployeeStatusInput, Employee
 import { EmployeeResponse, PaginatedEmployeeResponse, toEmployeeResponse } from "./employee.types";
 
 export class EmployeeService {
-  async createEmployee(adminId: number, data: CreateEmployeeInput): Promise<EmployeeResponse> {
+  async createEmployee(adminId: number, adminOrganizationId: number, data: CreateEmployeeInput): Promise<EmployeeResponse> {
     const { employeeId } = data;
 
     const employeeUser = await userRepository.findById(employeeId);
 
     if (!employeeUser) {
       throw new Error("USER_NOT_FOUND");
+    }
+
+    if (employeeUser.organizationId !== adminOrganizationId) {
+      throw new Error("EMPLOYEE_WRONG_ORGANIZATION");
     }
 
     const existingEmployee = await employeeRepository.findByEmployeeId(employeeId);

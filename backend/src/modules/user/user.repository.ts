@@ -109,7 +109,7 @@ export class UserRepository {
   }
 
   async count(where?: any): Promise<number> {
-    return prisma.user.count({ where });
+    return prisma.user.count({ where: where && "where" in where ? where.where : where });
   }
 
   async findById(id: number): Promise<SafeUser | null> {

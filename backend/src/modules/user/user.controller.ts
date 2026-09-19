@@ -112,10 +112,12 @@ export const updateUserController = async (
   reply: FastifyReply,
 ) => {
   try {
+    const currentUser = getCurrentUser(req);
     const user = await userService.updateUser(
       req.params.id,
       req.body,
-      getCurrentUser(req).organizationId,
+      currentUser.organizationId,
+      currentUser,
     );
 
     if (!user) {

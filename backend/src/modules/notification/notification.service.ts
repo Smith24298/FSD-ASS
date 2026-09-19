@@ -35,12 +35,13 @@ export class NotificationService {
 
   async list(
     userId: number,
+    organizationId: number,
     query: NotificationQuery,
   ): Promise<PaginatedNotifications> {
     const { page, limit, isRead, type } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = { userId };
+    const where: any = { userId, organizationId };
 
     if (isRead !== undefined) {
       where.isRead = isRead;
